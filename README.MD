@@ -42,6 +42,7 @@ Please feel free to contribute on github directly or contact me first via Telegr
 ## Donations
 
 Donations would be much appreciated so that I can spend more time on coding and research. 
+
 BTC: 3PMXTE771Qj3VN5XxVQrvaJ1u1pC5YV5Ta
 
 ETH: 0xb52770c0F71BF80aa97CCd79fe93f3F6520787Dc
