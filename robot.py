@@ -523,7 +523,7 @@ def buy_back(price_base):
                 rows = query(sql_string)
             
             # Checking if we should buy back. For BTC, valid if we are on the setup up, 2nd closes above 1, and the current price is above 2nd close 
-            if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60): 
+            if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]): 
                 if bars['td_up_2_cl_abv_1'].iloc[-1]:    
                     # For btc - the current is higher than previous green close plus 0.5%, consider modifying the strategy 
                     if strategy == 'btc': 
