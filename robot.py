@@ -43,16 +43,11 @@ print "Initialising..."
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
 speedrun = 1 # 1
 
-#################### For Telegram integration and gmail ###############################################################
+#################### For Telegram integration ###############################################################
 chat = telegram()
 
 comm_method = 'chat' # 'mail' or 'chat'
 send_messages = True
-
-#### Gmail #####
-fromaddr = "pytrader.illi4"
-toaddr = "illi4.a@gmail.com"
-email_passw = "7CR>bT011"
 
 ################### Command prompt parameters ############################################################
 # Use: python robot.py simulation_flag(s/r/sns/rns) basic_currency altcoin entry_price TP% SL% (limit_of_amount_to sell) (sell_portion)
@@ -173,6 +168,11 @@ exchange = detect_exchange(market)
 price_target = price_curr*tp
 sl_target = price_curr*sl
 price_entry = price_curr
+
+#### Gmail #####
+fromaddr = "fromaddress@gmail.com"    # replace to a proper address 
+toaddr = "to@address.com"    # replace to a proper address 
+email_passw = "your_gmail_pass"
 
 #################  Parameters section ################
 ##################################################
@@ -523,6 +523,7 @@ def buy_back(price_base):
                 rows = query(sql_string)
             
             # Checking if we should buy back. For BTC, valid if we are on the setup up, 2nd closes above 1, and the current price is above 2nd close 
+            # Should not be buying on 1h setup 8 or 9
             if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]): 
                 if bars['td_up_2_cl_abv_1'].iloc[-1]:    
                     # For btc - the current is higher than previous green close plus 0.5%, consider modifying the strategy 
@@ -706,7 +707,7 @@ def to_the_moon(price_reached):
                     sale_trigger = ensure_sale(price_last_moon)   
                     lprint(["Sale trigger (post-profit)", sale_trigger])
                     
-             # If we have TD data        
+             ## If we have TD data        
             else: 
                 time_now = time.time()
                 time_diff = (math.ceil(time_now - start_time))/60    # timer in minutes 
@@ -747,7 +748,7 @@ def to_the_moon(price_reached):
                 # Update the status
                 rocket_flag, stat_msg = process_stat(status)
                 lprint([stat_msg])            
-                # For buyback - using rebuy at max minus 
+                # For buyback - using rebuy price
                 if price_last_moon > price_cutoff: 
                     stopped_price = trailing_stop 
                 else: 
@@ -765,6 +766,11 @@ def to_the_moon(price_reached):
             # Handling results
             rocket_flag, stat_msg = process_stat(status)
             lprint([stat_msg])
+            # For buyback - using rebuy price
+            if price_last_moon > price_cutoff: 
+                stopped_price = trailing_stop 
+            else: 
+                stopped_price = price_cutoff
                 
         # Checking Telegram requests and answering 
         if rocket_flag:
@@ -951,7 +957,7 @@ def sell_now(at_price):
         if balance_available <= balance_start * Decimal(0.01):
             sell_run_flag = False
         
-        # Error strings
+        # Error strings for bittrex 
         err_1 = 'DUST_TRADE_DISALLOWED_MIN_VALUE_50K_SAT'
         err_2 = 'MIN_TRADE_REQUIREMENT_NOT_MET'
         
@@ -1242,6 +1248,8 @@ while run_flag and approved_flag:
             # Handling results
             run_flag, stat_msg = process_stat(status)
             lprint([stat_msg])
+            # For buybacks 
+            stopped_price = price_last
         
         # Checking cancellation request
         if run_flag and approved_flag:
@@ -1329,9 +1337,9 @@ elif stopped_mode == 'post-profit':
     
     # Thresholds for post-profit fallback for BTC or ALTS
     if market == 'USDT-BTC': 
-        bb_price = price_exit  * 1.005 # stopped_price * 1.005 # Using fixed value of +0.5% from stop
+        bb_price = price_exit  * 1.005 # stopped_price * 1.005 # Using fixed value of +0.5% from stop; however, does not refer to price value when using TD analysis 
     else: 
-        bb_price = price_exit  * 1.01 # stopped_price * 1.01 # Using fixed value of +1% from stop
+        bb_price = price_exit  * 1.01 # stopped_price * 1.01 # Using fixed value of +1% from stop; however, does not refer to price value when using TD analysis 
     
     lprint(["Setting buyback price as actual +1%. Stopped_price:", stopped_price, "bb_price", bb_price])
     # If it was a loser - delete the info in DB and continue with BBack 
