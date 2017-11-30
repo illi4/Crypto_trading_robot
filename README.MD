@@ -17,11 +17,11 @@ The following scripts are used:
 - Loglib.py is a library with a few logging functions 
 - Platformlib.py is a library to detect your OS and return proper folders to launch additional scripts
 - Price_logger.py gets price ticker from exchanges and saves data in price_log folder 
-- Robot.py is the main script which performs the monitoring of position prices and sells or buys back
-- Smart_buy.py is the script used to buy positions immediately or on specific events 
 - Sqltools.py is used for working with workflow.db sqlite database
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators
 - Telegramlib.py works with telegram messages. Note that you would need to register a telegram bot and configure your tokens / chat id in this script. 
+- **Robot.py** is a core script which performs the monitoring of position prices and sells or buys back
+- **Smart_buy.py** is a core script used to buy positions immediately or on specific events 
 
 ## Scripts logic 
 
