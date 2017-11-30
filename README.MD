@@ -4,6 +4,8 @@
 
 This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves. The scripts were written for Python 2.7 and have not been tested on Python 3. 
 
+Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide when to enter and exit and what your stop losses / take profit targets are. 
+
 ## Files 
 
 The following folders are in the project: 
