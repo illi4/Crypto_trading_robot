@@ -395,6 +395,9 @@ except urllib2.URLError:
 ### Start timer for price switching
 timer_start = time.time()
 
+# DEBUG 
+print fixed_price_flag, fixed_price  
+
 # Handling simulation modes 
 if mode == 'reg-s': 
     wf_run_mode = 's' # simulating
@@ -456,8 +459,8 @@ while buy_flag and approved_flag:
         if price_unit is None: 
             price_unit = 0
         
-        source_filled = price_unit * quantity_filled
-        sum_paid += source_filled   # for averaging of price 
+        source_filled = Decimal(str(price_unit * quantity_filled))
+        sum_paid += Decimal(str(source_filled))   # for averaging of price 
         sum_quantity += quantity_filled  # for averaging of price 
         
         str_status = '{} filled {}, {} filled: {}'.format(currency, quantity_filled, trade, source_filled) 
@@ -534,7 +537,11 @@ while buy_flag and approved_flag:
                     lprint([market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
             else: 
                 lprint([market, ': breakout price', breakout_target, 'not reached'])    
-    
+        
+        ## If requested to buy now 
+        if mode == 'now':
+            fixed_price_starter = True 
+        
     # If meeting conditions for fixed price - get the current   
     if fixed_price_flag and fixed_price_starter: 
         fixed_price = get_last_price(market)        
@@ -547,7 +554,8 @@ while buy_flag and approved_flag:
         lprint(["Buy trigger", float_price_starter])
                           
     # Checking how much is left to buy and setting the price
-    if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag): 
+    # cannot do this with Decimals; float precision is fine here
+    if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag):       
         
         # If we are using market price (smartbuy)
         if fixed_price_flag != True:      
@@ -576,7 +584,7 @@ while buy_flag and approved_flag:
             lprint([str_status])    
             
             # If in simulation mode
-            if wf_run_mode == 's' or wf_run_mode == 'sns':
+            if wf_run_mode == 's' or wf_run_mode == 'sns' or wf_run_mode == 'reg-s' or wf_run_mode == 'brk-s':
                 buy_flag = False 
                 sleep_timer = 0 
                 lprint(['Bought in simulation'])  
@@ -598,7 +606,7 @@ while buy_flag and approved_flag:
                     chat.send('Issues with buying on the ' + market)
         
         # Number of orders to check 
-        # start with 7, then 5, then 3, then 2, then 1 
+
         ''' # Old approach 
         if orders_check == 7: 
             orders_check -= 2
@@ -647,7 +655,7 @@ rows = query(sql_string)
  
 if sum_quantity > 0: 
     if (wf_run_mode != 's') and (wf_run_mode != 'sns'):
-        avg_price = round(sum_paid / sum_quantity, 8)
+        avg_price = round(sum_paid / Decimal(str(sum_quantity)), 8)
         lprint(['Average price paid:', avg_price])    
     else:
         # If simulation
