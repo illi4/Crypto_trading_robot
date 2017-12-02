@@ -27,8 +27,8 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from loglib import logfile # logging 
 import platformlib as platform  # detecting the OS and assigning proper folders 
 
-# Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
+# Universal functions for all exchanges              
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
 
 # TD analysis library
 import tdlib as tdlib
@@ -41,7 +41,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 print "Initialising..."
 
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun = 1 # 1
+speedrun =  1 # 1
 
 #################### For Telegram integration ###############################################################
 chat = telegram()
@@ -50,14 +50,14 @@ comm_method = 'chat' # 'mail' or 'chat'
 send_messages = True
 
 ################### Command prompt parameters ############################################################
-# Use: python robot.py simulation_flag(s/r/sns/rns) basic_currency altcoin entry_price TP% SL% (limit_of_amount_to sell) (sell_portion)
+# Use: python robot.py exchange simulation_flag(s/r/sns/rns) basic_currency altcoin entry_price TP% SL% (limit_of_amount_to sell) (sell_portion)
 # s - simulation with stop-loss
 # r - real mode with stop-loss 
 # sns - simulation without stop loss and only with trailing stop on profit 
 # rns - real mode without stop loss and only with trailing stop on profit 
 #
 # Example: trade 100 LTC (vs BTC) bought at 0.0017 with the target profit of 18% and stop-loss 5% in simulation mode
-# > python robot.py s BTC LTC 0.0017 18 5 100
+# > python robot.py btrx s BTC LTC 0.0017 18 5 100
 # 
 # Running without input parameters will start Telegram bot listener
 #
@@ -90,27 +90,51 @@ try:
         stop_loss = True
     else: 
         no_input = True 
-    trade = argv[2].upper()
-    currency = argv[3].upper()
-    price_curr = float(argv[4])
-    
-    tp_p = float(argv[5])
-    sl_p = float(argv[6])
-    
-    tp = 1 + round(float(argv[5])/100.0, 2)
-    sl = 1 - round(float(argv[6])/100.0, 2)
-    
+
+    # Exchange 
+    exchange_abbr = argv[2].lower()
+    if exchange_abbr not in ['btrx', 'bnc']: 
+        print 'Incorrect exchange specified (should be btrx or bnc)\n\n'
+        exit(0)
+    if exchange_abbr == 'btrx': 
+        exchange = 'bittrex' 
+        comission_rate = 0.0025
+    elif exchange_abbr == 'bnc': 
+        exchange = 'binance' 
+        comission_rate = 0.001
+
+    trade = argv[3].upper() 
+    currency = argv[4].upper()
+    price_curr = float(argv[5])
+
+    price_target = float(argv[6])
+    sl_target = float(argv[7])
+    price_entry = price_curr
+
+    tp = round(price_target/price_curr, 5)
+    sl = round(sl_target/price_curr, 5) 
+
+    tp_p = (tp - 1.0)*100.0 
+    sl_p = (1.0 - sl)*100.0 
+
+    ''' # Changed to absolute prices not % 
+    tp_p = float(argv[6])
+    sl_p = float(argv[7])
+
+    tp = 1 + round(float(argv[6])/100.0, 2)
+    sl = 1 - round(float(argv[7])/100.0, 2)
+    ''' 
+
     # In the moon cycle
-    
     try:
-        limit_sell_amount = float(argv[7])
+        limit_sell_amount = float(argv[8])
     except: 
         limit_sell_amount = 0
     try:
-        sell_portion = float(argv[8])
+        sell_portion = float(argv[9])
     except: 
         sell_portion = None
-    # print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  # DEBUG # 
+    print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  # DEBUG # 
 except:
     no_input = True 
 
@@ -119,8 +143,8 @@ except:
 if no_input:
     print '----------------------------------------------------------------------------------------------\n' + \
     'Run parameters not specified. Restart the script using:\n' + \
-    'robot.py simulation (s/r/sns/rns) basic_curr altcoin entry_price TP% SL% [limit_of_amount_to_sell] [sell_portion]\n' +\
-    'Example: > python robot.py s BTC LTC 0.0017 18 5 100\n\n' +\
+    'robot.py exchange simulation (s/r/sns/rns) basic_curr altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion]\n' +\
+    'Example: > python robot.py btrx s BTC LTC 0.0017 0.0021 0.0015 100\n\n' +\
     'Modes:\n>s (simulation with stop-loss)\n>r (real mode with stop-loss)\n>sns (simulation and stop only on profit)\n>rns (real and stop only on profit)'  
     exit(0) 
     
@@ -131,35 +155,9 @@ if simulation is True:
     simulation_balance = limit_sell_amount
     sell_portion = limit_sell_amount
     
-######################### MARKET TO TRADE / TD DATA  / STRATEGY  ############################
+######################### MARKET TO TRADE   ############################
 market = '{0}-{1}'.format(trade, currency)
-
-# Check what's up with TD analysis data and store the current hour for further use 
-# td_curr_hour = strftime("%H", localtime())
-start_time = time.time()
-td_data_available = True  # default whick will be changed to False when needed  
-bars = td_info.stats(market, '30min', 10000, 10)    # should be 30 min for trailing stop and 1h for buyback 
-try: 
-    if bars == None: 
-        td_data_available = False 
-except: 
-    for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
-        if elem is None: 
-            td_data_available = False 
-print "TD data availability:", td_data_available
-
-# Strategy 
-if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
-    strategy = 'alt-med'
-elif currency == 'BTC': 
-    strategy = 'btc'
-else: 
-    strategy = 'alt-volatile' 
-print "Price action strategy:", strategy
-    
-####### Exchange check - default is bittrex
-exchange = detect_exchange(market) 
-    
+        
 ######################### PRICES ###################################
 # something should be bought at a price_curr level to start from  #
 ###################################################################
@@ -515,7 +513,8 @@ def buy_back(price_base):
             
             # Getting the current price 
             price_upd = get_last_price(market)
-            lprint(["TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1]])        
+            lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "TD2 close:", bars['td_up_2_close'].iloc[-1], "Time elapsed (min):", time_elapsed ])        
+            lprint([  "Strategy:", strategy, "Price update:", price_upd, "TD2 close_above_1:", bars['td_up_2_cl_abv_1'].iloc[-1], "Last bar close:", bars['close'].iloc[-1] ])        
             
             # Updating DB
             if bb_id is not None: 
@@ -548,7 +547,6 @@ def buy_back(price_base):
     
 ############### Cancelling active orders on particular market if there are any 
 def cancel_orders(market):    
-    #my_orders = api.getopenorders(market)
     my_orders = getopenorders(exchange, market)
     # print "Orders", my_orders
     if my_orders <> '': 
@@ -556,8 +554,7 @@ def cancel_orders(market):
             lprint(["Cancelling open order:", val['OrderUuid'], "quantity", val['Quantity'], 
                    "quantity remaining", val['QuantityRemaining'], "limit", val['Limit'], "price", val['Price']
                    ])
-            #cancel_stat = api.cancel(val['OrderUuid'])
-            cancel_stat = cancel(exchange, val['OrderUuid'])
+            cancel_stat = cancel(exchange, market, val['OrderUuid'])
             # Wait for a moment
             # time.sleep(1)
 
@@ -575,7 +572,6 @@ def sell_orders_info():
         alt_sold_total = 0 
         
         # Getting information on sell orders executed
-        #orders_opening_upd = api.getorderhistory(market, 100) 
         orders_opening_upd = getorderhistory(exchange, market) 
         for elem in orders_opening_upd: 
             orders_new.add(elem['OrderUuid'])
@@ -589,7 +585,7 @@ def sell_orders_info():
             lprint(["New executed orders"]) #DEBUG_NOW
             for elem in orders_executed: 
                 #order_info = api.getorder(elem)
-                order_info = getorder(exchange, elem)
+                order_info = getorder(exchange, market, elem)
                 main_curr_from_sell += order_info['Price']  
                 commission_total += order_info['CommissionPaid']
                 # alt_sold_total += order_info['Quantity'] 
@@ -608,7 +604,7 @@ def sell_orders_outcome():
     
     if no_sell_orders != True: 
         # Calculating totals 
-        total_gained = main_curr_from_sell - float(value_original) - commission_total
+        total_gained = float(main_curr_from_sell) - float(value_original) - float(commission_total)
         
         # Here division by zero error handling
         if float(value_original)  > 0: 
@@ -645,8 +641,9 @@ def sell_orders_outcome():
                 cell.font = Font(name='Arial', size=10)
             #
             wb.save("Trade_history.xlsx")
-            if platform_run != 'Windows': 
-                copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
+            
+            #if platform_run != 'Windows': 
+            #    copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
             
         except: 
             lprint(['Trade history xls unavailable']) 
@@ -658,7 +655,7 @@ def sell_orders_outcome():
 
 def to_the_moon(price_reached):     
     # Global variables used 
-    global main_curr_from_sell, value_original, price_curr, commission_total, sl, price_target, t_m_id, approved_flag, offset_check
+    global main_curr_from_sell, value_original, price_curr, commission_total, sl, price_target, t_m_id, approved_flag, offset_check, comission_rate
     global sleep_timer
     global db, cur, job_id
     global stopped_price
@@ -848,7 +845,7 @@ def sell_now(at_price):
     proceed_w_sleep = False
     
     # Global variables used 
-    global main_curr_from_sell, value_original, price_curr, commission_total, simulation, currency, market, t_m_id, approved_flag, offset_check, simulation_balance, sell_portion, limit_sell_amount
+    global main_curr_from_sell, value_original, price_curr, commission_total, simulation, currency, market, t_m_id, approved_flag, offset_check, simulation_balance, sell_portion, limit_sell_amount, comission_rate
     global sleep_sale, steps_ticker, sleep_ticker
     global db, cur, job_id
     global chat
@@ -868,26 +865,26 @@ def sell_now(at_price):
         lprint(["Balance available to sell", balance_start]) #DEBUG
         
     if limit_sell_amount is not None: 
-        limit_sell_amount = Decimal(limit_sell_amount) 
+        limit_sell_amount = Decimal(str(limit_sell_amount)) # using str, we will not have more decimal numbers than originally needed
     if sell_portion is not None: 
-        sell_portion = Decimal(sell_portion) 
+        sell_portion = Decimal(str(sell_portion))  
     
     if simulation == True: 
-        balance_start = Decimal(simulation_balance)
-        balance_available = Decimal(simulation_balance)
-        remaining_sell_balance = Decimal(simulation_balance)
+        balance_start = Decimal(str(simulation_balance))
+        balance_available = Decimal(str(simulation_balance))
+        remaining_sell_balance = Decimal(str(simulation_balance))
         
     # Limiting if required. Should be done with orders cancelled
     if (limit_sell_amount < balance_start) and (limit_sell_amount > 0):
-        balance_adjust = Decimal(balance_start) - Decimal(limit_sell_amount)
-        balance_start = Decimal(limit_sell_amount)
+        balance_adjust = Decimal(str(balance_start)) - Decimal(str(limit_sell_amount))
+        balance_start = Decimal(str(limit_sell_amount))
         # DEBUG #  print ">> Adjust", balance_adjust, "Bal_start", balance_start, "Limit sell am", limit_sell_amount  
         lprint(["Limiting total amount to be sold. Total:", limit_sell_amount, "Adjustment:", balance_adjust])
     else:
         balance_adjust = 0
 
     # Changing the original value for future reference 
-    value_original = Decimal(price_entry) * balance_start   # price_curr*balance_start   
+    value_original = Decimal(str(price_entry)) * balance_start   # price_curr*balance_start   
     lprint(["Original value:", value_original])
         
     # Main sell loop
@@ -912,13 +909,13 @@ def sell_now(at_price):
                 if (val['Quantity'] == 0):
                     unfilled_prop = 0
                 else:
-                    unfilled_prop = Decimal(val['QuantityRemaining'])/Decimal(val['Quantity'])
+                    unfilled_prop = Decimal(str(val['QuantityRemaining']))/Decimal(str(val['Quantity']))
                 if unfilled_prop >= 0.05:  # if more than 5% still left in the order
                     lprint(["Cancelling unfilled order:", val['OrderUuid'], "quantity", val['Quantity'], 
                            "quantity remaining", val['QuantityRemaining'], "limit", val['Limit'], "price", val['Price']
                            ]) 
                     #cancel_stat = api.cancel(val['OrderUuid'])
-                    cancel_stat = cancel(exchange, val['OrderUuid'])
+                    cancel_stat = cancel(exchange, market, val['OrderUuid'])
                     time.sleep(5) # Wait for cancellations to be processed just in case. Then we will get information on available balance which includes cancellations.
                     # Set decrease price flag
                     decrease_price_flag = True
@@ -948,7 +945,7 @@ def sell_now(at_price):
         #print ">> Balance_available pre", balance_available #DEBUG  
         #print  ">> Balance_adjust pre", balance_adjust #DEBUG  
         # Adjusting according to the limit 
-        balance_available = balance_available - Decimal(balance_adjust)
+        balance_available = balance_available - Decimal(str(balance_adjust))
         
         if sell_portion == None: 
             sell_portion = balance_available
@@ -965,7 +962,7 @@ def sell_now(at_price):
         if sell_run_flag: 
             lprint(["Sell amount", balance_available, "at price threshold", at_price, "split on", sell_portion])
             remaining_sell_balance = balance_available   
-            sale_steps_no = int(math.ceil(round(Decimal(balance_available)/Decimal(sell_portion), 3)))   
+            sale_steps_no = int(math.ceil(round(Decimal(str(balance_available))/Decimal(str(sell_portion)), 3)))   
             
             #print ">> Sell amount", balance_available, "remaining_sell_balance", remaining_sell_balance  #DEBUG#
             
@@ -988,7 +985,7 @@ def sell_now(at_price):
                 if simulation != True: 
                     #sell_result = api.selllimit(market, sell_q_step, price_to_sell) 
                     sell_result = selllimit(exchange, market, sell_q_step, price_to_sell) 
-                    lprint(["Sell result:", sell_result])  # DEBUG # 
+                    lprint([">> Sell result:", sell_result])  # DEBUG # 
                     if (sell_result == err_1) or (sell_result == err_2):
                         sell_run_flag = False
                         stopmessage = 'err_low'
@@ -1006,9 +1003,9 @@ def sell_now(at_price):
                             stopmessage = 'no_idea'
                 
                 else: 
-                    # If in simulation - calculate profit from virtual sale. Bittrex commission is currently 0.25%
+                    # If in simulation - calculate profit from virtual sale.  
                     main_curr_from_sell += float(sell_q_step) * price_to_sell 
-                    commission_total += float(sell_q_step)*price_to_sell*0.0025
+                    commission_total += float(sell_q_step)*price_to_sell * comission_rate
 
                 # Update the db with price_last_sell
                 sql_string = "UPDATE jobs SET price_curr={}, selling={} WHERE job_id={}".format(round(price_last_sell, 8), 1, job_id)
@@ -1070,8 +1067,6 @@ def check_sell_flag():
         sell_initiate = True
     return sell_initiate
  
-
- 
 def send_notification(subj, text):
     global send_messages, trade_id, comm_method, market
     
@@ -1102,6 +1097,7 @@ def timenow():
 ########################MAIN WORKFLOW###############################
 #######################################################################
 #######################################################################
+#######################################################################
 
 if stop_loss: 
     lprint([market, "| Take profit target:", price_target, "| Stop loss:", sl_target, "| Simulation mode:", simulation])
@@ -1121,7 +1117,6 @@ if tp < sl:
     
 # Checking market correctness and URL validity, as well as protecting from fat fingers
 try: 
-    #ticker_upd = api.getticker(market)
     ticker_upd = getticker(exchange, market) 
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
@@ -1129,7 +1124,6 @@ try:
         while ticker_upd is None: 
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             time.sleep(300) # sleeping for 5 minutes and checking again
-            #ticker_upd = api.getticker(market)  
             ticker_upd = getticker(exchange, market) 
         
     if ticker_upd == 'INVALID_MARKET': 
@@ -1152,7 +1146,6 @@ except urllib2.URLError:
     
 # Checking available balance
 if simulation != True: 
-    #balance = api.getbalance(currency)
     balance = getbalance(exchange, currency)
     if balance['Available'] == 0: 
         terminate_w_message('Error: Zero balance', currency + ': zero balance')
@@ -1164,16 +1157,41 @@ approved_flag = True
 no_sell_orders = False      # default value to suit both simulation and the real run
 
 ### Inserting in the sqlite db if started fine ##
-sql_string = "INSERT INTO jobs(market, tp, sl, simulation, mooning, selling, price_curr, percent_of, abort_flag, stop_loss, entry_price, mode, tp_p, sl_p) VALUES ('{}', {}, {}, {}, {},  {},  {},  {},  {}, {}, {}, '{}', {}, {})".format(
-    market.upper(), price_target, sl_target, int(simulation), int(False), int(False), price_curr, 100, int(False), int(stop_loss), price_entry, simulation_param, tp_p, sl_p)    
+sql_string = "INSERT INTO jobs(market, tp, sl, simulation, mooning, selling, price_curr, percent_of, abort_flag, stop_loss, entry_price, mode, tp_p, sl_p, exchange) VALUES ('{}', {}, {}, {}, {},  {},  {},  {},  {}, {}, {}, '{}', {}, {}, '{}')".format(
+    market.upper(), price_target, sl_target, int(simulation), int(False), int(False), price_curr, 100, int(False), int(stop_loss), price_entry, simulation_param, tp_p, sl_p, exchange)    
 job_id, rows = query_lastrow_id(sql_string)
+
+############# Price data for time analysis and strategy ################################
+# Check what's up with TD analysis data and store the current hour for further use 
+
+# td_curr_hour = strftime("%H", localtime())
+start_time = time.time()
+td_data_available = True  # default whick will be changed to False when needed  
+bars = td_info.stats(market, '30min', 10000, 10)    # should be 30 min for trailing stop and 1h for buyback 
+try: 
+    if bars == None: 
+        td_data_available = False 
+except: 
+    for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
+        if elem is None: 
+            td_data_available = False 
+print "TD data availability:", td_data_available
+
+# Strategy 
+if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
+    strategy = 'alt-med'
+elif currency == 'BTC': 
+    strategy = 'btc'
+else: 
+    strategy = 'alt-volatile' 
+print "Price action strategy:", strategy
+
 
 # Creating new set to store previously executed orders 
 # Will be used to calculate the gainz 
 orders_start = set()
 orders_new = set()
 
-#orders_opening = api.getorderhistory(market, 100) 
 orders_opening = getorderhistory(exchange, market)
 #DEBUG 
 lprint(["Orders when starting the script"])
@@ -1354,10 +1372,10 @@ else:
 # This runs until True is returned (buyback) 
 try: 
     lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
-    buy_trade_price = float(balance_start) * bb_price * 0.9975 # commission on bittrex is 0.25% fixed, this is when we do not have TD data 
+    buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate) # commission depending on the exchange. If we do not have TD data
     
     # Inserting into buyback information table 
-    sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price) VALUES ('{}', {}, {}, {})".format(market, bb_price, bb_price, buy_trade_price)
+    sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
     bb_id, rows = query_lastrow_id(sql_string)      
     
     # Getting a snapshot of time for buyback so that we wait for at least an hour before starting buyback 
@@ -1365,7 +1383,7 @@ try:
     # Starting buyback
     bb_flag = buy_back(bb_price)    
     
-    # If we have reached the target and there was no cancellation through Telegram
+    # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
     if bb_flag: 
         send_notification('Buyback', 'Buy back initiated for ' + market)  
         
@@ -1374,12 +1392,18 @@ try:
         # changed price_entry to bb_price in the last param 
         #
         # Changed new sl value to have tighter stop (*0.8): 2% -> 1.6%, as well as tp to more moderate (*0.8 too) 
-        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry) VALUES ({}, {}, {}, '{}', {})".format(float(tp_p*0.8), float(sl_p*0.8), 0, simulation_param, float(bb_price))
+        
+        # Changed consodering that tp and sl store price info and not %; removed making percent more stringent 
+        tp_price = bb_price*tp
+        sl_price = buy_back*sl
+        
+        #sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(float(tp_p*0.8), float(sl_p*0.8), 0, simulation_param, float(bb_price), exchange)
+        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange)
         wf_id, rows = query_lastrow_id(sql_string)       
 
         if wf_id is not None: 
             buy_market = '{0}-{1}'.format(trade, currency)
-            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}' WHERE wf_id = {}".format(market, trade, currency, wf_id) 
+            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange, wf_id) 
             job_id, rows = query_lastrow_id(sql_string)
             
         # Buy depending on the platform. We will buy @ market price now, and the price entry price is in the DB
@@ -1389,11 +1413,11 @@ try:
             mode_buy = 'reg' 
         
         if platform_run == 'Windows': 
-            cmd_str = cmd_init_buy + ' '.join([mode_buy, trade, currency, str(buy_trade_price)])    #, str(bb_price), '5']) 
+            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange, trade, currency, str(buy_trade_price)])    #, str(bb_price), '5']) 
             # cmd_init_buy is 'start cmd /K python robot.py '
         else: 
             # Nix
-            cmd_str = cmd_init_buy + ' '.join([mode_buy, trade, currency, str(buy_trade_price)]) + '"'    #, str(bb_price), '5']) + '"'
+            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange, trade, currency, str(buy_trade_price)]) + '"'    #, str(bb_price), '5']) + '"'
             # cmd_init_buy is 'gnome-terminal --tab --profile Active -e "python /home/illi4/Robot/robot.py'   # we will also need to add params and close with "   
         os.system(cmd_str)
     # If buyback cancellation was requested 

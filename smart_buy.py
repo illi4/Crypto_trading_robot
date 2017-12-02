@@ -22,7 +22,7 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from loglib import logfile # logging
 import platformlib as platform  # detecting the OS and assigning proper folders 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
 
 print "Running..."
 
@@ -101,7 +101,7 @@ def send_notification(subj, text):
             chat.send(text)
 
             
-################## INPUT PARAMETERS
+################## INPUT PARAMETERS ####################################
 try: 
     # Modes: reg / brk (regular / buy on breakout) 
     mode = argv[1].lower()
@@ -109,25 +109,37 @@ try:
         print 'Incorrect mode specified (should be reg, brk, now, reg-s, brk-s)\n\n'
         send_notification('Incorrect mode', 'Incorrect mode specified')
         exit(0)
+        
+    # Exchange 
+    exchange_abbr = argv[2].lower()
+    if exchange_abbr not in ['btrx', 'bnc']: 
+        print 'Incorrect exchange specified (should be btrx or bnc)\n\n'
+        send_notification('Incorrect exchange', 'Incorrect exchange specified')
+        exit(0)
+    if exchange_abbr == 'btrx': 
+        exchange = 'bittrex' 
+    elif exchange_abbr == 'bnc': 
+        exchange = 'binance' 
+        
     # Main currency (e.g. BTC) 
-    trade = argv[2].upper()
-    currency = argv[3].upper()
-    source_position = float(argv[4])
+    trade = argv[3].upper()
+    currency = argv[4].upper()
+    source_position = float(argv[5])
     market = '{0}-{1}'.format(trade, currency)
     # If the price is set up
     try: 
-        fixed_price = float(argv[5])
+        fixed_price = float(argv[6])
         fixed_price_flag = True
     except:
         fixed_price = 0
         fixed_price_flag = False
     # Time restriction for fixed price orders in minutes
     try: 
-        time_restriction = float(argv[6])
+        time_restriction = float(argv[7])
     except:
         time_restriction = 0
 except:
-    print 'Specify the parameters: mode basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM on 0.005 BTC for the price of 0.0038 for 15 minutes, then switches to market prices)\nModes: reg(regular), brk (buy on breakout), now (right away with no confirmations)'
+    print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bnc (bittrex, binance)'
     exit(0)
 
 # Sleeping for a bit so that information on workflows is updated in the database 
@@ -142,9 +154,6 @@ def lprint(arr):
     logger.write(msg)
     print msg
 
-############################################################################
-# Exchange check - default is bittrex
-exchange = detect_exchange(market) 
     
 ########### Check if this is a part of workflow ######################################
 sql_string = "SELECT wf_id, run_mode FROM workflow WHERE market = '{}'".format(market)
@@ -393,9 +402,8 @@ if mode == 'reg-s':
 if mode == 'brk-s': 
     wf_run_mode = 's' # simulating
     mode = 'brk' # setting up a regular mode 
-
 # Breakout confirmation price 
-#price_info = fixed_price
+# price_info = fixed_price
 if mode == 'brk': 
     breakout_target = fixed_price # fixed_price * breakout_perc # turned out to be quite inconvenient. as a general rule just set ~ +5% from the target breakout line 
     #price_info = breakout_target
@@ -405,11 +413,13 @@ if mode == 'now':
     orders_check = 3
     
 ### Inserting in the sqlite db if started fine ##
-sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode) VALUES ('{}', 0, {}, {}, {}, '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode)
+sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode, exchange) VALUES ('{}', 0, {}, {}, {}, '{}', '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode, exchange)
 job_id, rows = query_lastrow_id(sql_string)
 
 ############  Default values 
-source_start = source_position
+source_position = Decimal(str(source_position))
+
+source_start = source_position   # does not work straightforward
 fixed_price_starter = False 
 float_price_starter = False 
 
@@ -429,11 +439,11 @@ while buy_flag and approved_flag:
     # Checking existing orders
     if buy_uuid != None: 
         # Get info and cancel 
-        lprint(['Cancelling:' , buy_uuid])    
-        cancel_stat = cancel(exchange, buy_uuid)
+        lprint(['>>> Cancelling:' , buy_uuid, exchange, market])    
+        cancel_stat = cancel(exchange, market, buy_uuid)
         time.sleep(10) # wait for it to be cancelled  - 10 sec
         #order_info = api.getorder(buy_uuid)
-        order_info = getorder(exchange, buy_uuid)
+        order_info = getorder(exchange, market, buy_uuid)
         # print 'Order info:', order_info
         buy_uuid = None 
         
@@ -472,7 +482,7 @@ while buy_flag and approved_flag:
     approved_flag = check_cancel_flag()
     if approved_flag == False: 
         lprint(["Shutdown was requested via Telegram"])   
-        cancel_stat = cancel(exchange, buy_uuid)
+        cancel_stat = cancel(exchange, market, buy_uuid)
         time.sleep(5) # wait for it to be cancelled 
         sleep_timer = 0
     
@@ -537,15 +547,14 @@ while buy_flag and approved_flag:
         lprint(["Buy trigger", float_price_starter])
                           
     # Checking how much is left to buy and setting the price
-    if (round(source_position, 4) > source_start*0.01) and (approved_flag): 
+    if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag): 
         
         # If we are using market price (smartbuy)
         if fixed_price_flag != True:      
             # Getting prices if we have not specified a fixed one 
-            #orderbook = api.getorderbook(market, 'buy')
             orderbook = getorderbook(exchange, market)
             if float_price_starter: 
-                lprint(['Number of orders used:', orders_check])  
+                lprint(['>> Number of orders used:', orders_check])  
             for elem in orderbook[:orders_check]: 
                 # print elem['Rate'] # DEBUG #
                 buy_rate += elem['Rate']
@@ -562,7 +571,7 @@ while buy_flag and approved_flag:
         if (fixed_price_flag and fixed_price_starter) or ((fixed_price_flag != True) and (float_price_starter)):                
             str_status = 'Used rate: {}'.format(buy_rate)  
             lprint([str_status])    
-            quantity = round(source_position/buy_rate, 4)
+            quantity = round(source_position/Decimal(str(buy_rate)), 4)
             str_status = 'Quantity to buy {}'.format(quantity)  
             lprint([str_status])    
             
@@ -575,16 +584,22 @@ while buy_flag and approved_flag:
                 avg_price = buy_rate
             # If real mode    
             else:
-                #buy_result = api.buylimit(market, quantity, buy_rate)  
                 buy_result = buylimit(exchange, market, quantity, buy_rate)  
                 print 'Quantity {} buy_rate {}'.format(quantity, buy_rate) #DEBUG
-                print buy_result #DEBUG
-                buy_uuid = buy_result['uuid']
-                lprint(['Placed order', buy_uuid])    
+                # print buy_result #DEBUG
+                
+                try: 
+                    buy_uuid = buy_result['uuid']
+                    lprint(['>> Placed order', buy_uuid])    
+                except: 
+                    # Issues with buying 
+                    buy_flag = False 
+                    wf_id = None
+                    chat.send('Issues with buying on the ' + market)
         
         # Number of orders to check 
         # start with 7, then 5, then 3, then 2, then 1 
-        ''' 
+        ''' # Old approach 
         if orders_check == 7: 
             orders_check -= 2
         elif (orders_check > 1) and (orders_check <= 5): 
@@ -609,7 +624,7 @@ while buy_flag and approved_flag:
         if buy_uuid != None: 
             # Get info and cancel 
             lprint(['Cancelling:' , buy_uuid])    
-            cancel_stat = cancel(exchange, buy_uuid)
+            cancel_stat = cancel(exchange, market, buy_uuid)
         # Deleting the task from the db 
         sql_string = "DELETE FROM buys WHERE job_id = {}".format(job_id)
         rows = query(sql_string)
@@ -662,8 +677,10 @@ if sum_quantity > 0:
                 cell.font = Font(name='Arial', size=10)
             #
             wb.save("Trade_history.xlsx")
+            ''' 
             if platform_run != 'Windows': 
                 copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
+            ''' 
         except: 
             lprint(['Trade history xls unavailable']) 
 
@@ -705,17 +722,17 @@ if wf_id is not None:
         sql_string = "DELETE FROM workflow WHERE wf_id = {}".format(wf_id)
         rows = query(sql_string)
         
-        print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, wf_info_trade, wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
+        print '>>> Start a profit task: {} {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
         # Launching depending on the platform
         if platform_run == 'Windows': 
-            cmd_str = cmd_init + ' '.join([wf_stop_mode, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)])
+            cmd_str = cmd_init + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)])
         else: 
             # Nix
-            cmd_str = cmd_init + ' '.join([wf_stop_mode, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) + '"'
+            cmd_str = cmd_init + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) + '"'
         os.system(cmd_str)
         
         # Check if launched fine  
-        time.sleep(40)
+        time.sleep(65)
         sql_string = "SELECT job_id FROM jobs WHERE market = '{}'".format(market)
         ### To check because some weird stuff is going on 
         #stat_msg = "Called the following SQL to check if launched: ", sql_string 

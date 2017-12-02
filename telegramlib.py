@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import json 
 import requests
 from time import sleep
@@ -5,20 +6,23 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from time import localtime, strftime
 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
 
-# Telegram functions for robots 
-TOKEN = "YOUR TOKEN" 
-chat_id = 11111111111  # Replace with your chat id 
-telegram_check_sec = 3  # Telegram monitoring interval  
+# Telegram functions 
+TOKEN = "YOUR_TOKEN"    # Replace with your token 
+
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
 payload = ""
 headers = {
-    'x-api-key': "KEY",     # Replace with your key
-    'x-api-secret': "7a987d3ab5e6e3b8d5e28ab2c5adce7b",      # Replace with your secret key 
+    'x-api-key': "002741b64ab83f8684bf1b819c61f791",
+    'x-api-secret': "7a987d3ab5e6e3b8d5e28ab2c5adce7b",
     'content-type': "application/json"
     }
+
+chat_id = 000000000000  # Replace with your chat id  
+# Telegram monitoring interval  
+telegram_check_sec = 1
 
 class telegram(object):
     def __init__(self):
