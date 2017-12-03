@@ -25,6 +25,8 @@ The following scripts are used:
 - **Robot.py** is a core script which performs the monitoring of position prices and sells or buys back
 - **Smart_buy.py** is a core script used to buy positions immediately or on specific events 
 
+Some of settings should be changed to suit your environment, including date and time (Sydney time is currently used) and home directory on a *nix machine. 
+
 ## Scripts logic 
 
 I was too busy writing the code and did not have enough time to document what logic was implemented. You could take a look at the scripts to check it out. Just briefly, the following features are implemented: 
