@@ -516,15 +516,27 @@ def buy_back(price_base):
                     # For btc - the current is higher than previous green close plus 0.5%, consider modifying the strategy 
                     if strategy == 'btc': 
                         if price_upd > bars['td_up_2_close'].iloc[-1]*1.005: 
-                            bback_result = True 
-                            flag_reb_c = False 
-                            lprint(["TD buyback initiated"])
+                            # Additionally (verified on BTC): last 4H should not be red 
+                            lprint(["Getting 4H TD"])
+                            bars = td_info.stats(market, '4h', 50000, 5)    # updating bars info
+                            if bars['td_direction'].iloc[-1] == 'up': 
+                                bback_result = True 
+                                flag_reb_c = False 
+                                lprint(["TD buyback initiated"])
+                            else: 
+                                lprint(["4H TD is bearish"])
                     # For alts - the current is higher than previous green close plus 1.5%, consider modifying the strategy 
                     else: 
                         if price_upd > (bars['close'].iloc[-1])*1.015: 
-                            bback_result = True 
-                            flag_reb_c = False 
-                            lprint(["TD buyback initiated"])           
+                            # Additionally (verified on BTC): last 4H should not be red 
+                            lprint(["Getting 4H TD"])
+                            bars = td_info.stats(market, '4h', 50000, 5)    # updating bars info
+                            if bars['td_direction'].iloc[-1] == 'up': 
+                                bback_result = True 
+                                flag_reb_c = False 
+                                lprint(["TD buyback initiated"])
+                            else: 
+                                lprint(["4H TD is bearish"])    
 
             # There is no need to collect prices every 30 seconds for this if we are based on 1-h time indicators
             if flag_reb_c: 
