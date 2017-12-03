@@ -113,17 +113,8 @@ try:
 
     tp = round(price_target/price_curr, 5)
     sl = round(sl_target/price_curr, 5) 
-
     tp_p = (tp - 1.0)*100.0 
     sl_p = (1.0 - sl)*100.0 
-
-    ''' # Changed to absolute prices not % 
-    tp_p = float(argv[6])
-    sl_p = float(argv[7])
-
-    tp = 1 + round(float(argv[6])/100.0, 2)
-    sl = 1 - round(float(argv[7])/100.0, 2)
-    ''' 
 
     # In the moon cycle
     try:
@@ -134,7 +125,7 @@ try:
         sell_portion = float(argv[9])
     except: 
         sell_portion = None
-    print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  # DEBUG # 
+    # print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  # DEBUG # 
 except:
     no_input = True 
 
@@ -162,7 +153,6 @@ market = '{0}-{1}'.format(trade, currency)
 # something should be bought at a price_curr level to start from  #
 ###################################################################
 
-# DEBUG # price_curr = 0.0018  
 price_target = price_curr*tp
 sl_target = price_curr*sl
 price_entry = price_curr
@@ -273,12 +263,11 @@ def get_last_price(market):
     failed_attempts = 0
     for i in range(1, steps_ticker + 1):
         try:
-            ####ticker_upd = api.getticker(market) #OLD bittrex only 
             ticker_upd = getticker(exchange, market) 
             price_upd += ticker_upd
-            # print "Price averaging", i, ticker  
+            # print "Price averaging", i, ticker   
         except:
-            #print "Issues with URL (!) for market", market
+            # print "Issues with URL (!) for market", market
             failed_attempts += 1
         time.sleep(sleep_ticker)
     # Logging failed attempts number
@@ -297,7 +286,6 @@ def get_last_price(market):
             time.sleep(300) # sleeping for 5 minutes and checking again
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                #ticker_upd = api.getticker(market)  
                 ticker_upd = getticker(exchange, market) 
             except: 
                 ticker_upd = None
@@ -369,7 +357,6 @@ def candle_analysis(cross_target):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
         try:
-            #ticker_upd = api.getticker(market)
             ticker_upd = getticker(exchange, market) 
             price_upd = ticker_upd
             if (price_l == 0) or (price_upd < price_l): 
@@ -388,7 +375,7 @@ def candle_analysis(cross_target):
     
     # If retreiving prices fails completely
     if failed_attempts == steps_ticker:     
-        ticker_upd = None # Change
+        ticker_upd = None  
         # Could be related to maintenance
         try:
             send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
@@ -398,7 +385,6 @@ def candle_analysis(cross_target):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                #ticker_upd = api.getticker(market)  
                 ticker_upd = getticker(exchange, market) 
             except: 
                 ticker_upd = None
@@ -521,7 +507,9 @@ def buy_back(price_base):
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
                 rows = query(sql_string)
             
-            # Checking if we should buy back. For BTC, valid if we are on the setup up, 2nd closes above 1, and the current price is above 2nd close 
+            # Checking if we should buy back. For BTC, valid if: 
+            # 1. We are on the TD setup up, 
+            # 2. A candle with number 2 closes above 1, and the current price is above 2nd close 
             # Should not be buying on 1h setup 8 or 9
             if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]): 
                 if bars['td_up_2_cl_abv_1'].iloc[-1]:    
@@ -584,7 +572,6 @@ def sell_orders_info():
         else:
             lprint(["New executed orders"]) #DEBUG_NOW
             for elem in orders_executed: 
-                #order_info = api.getorder(elem)
                 order_info = getorder(exchange, market, elem)
                 main_curr_from_sell += order_info['Price']  
                 commission_total += order_info['CommissionPaid']
@@ -639,7 +626,6 @@ def sell_orders_outcome():
             index_row = "{}:{}".format(max_row, max_row) 
             for cell in ws[index_row]:
                 cell.font = Font(name='Arial', size=10)
-            #
             wb.save("Trade_history.xlsx")
             
             #if platform_run != 'Windows': 
@@ -659,7 +645,7 @@ def to_the_moon(price_reached):
     global sleep_timer
     global db, cur, job_id
     global stopped_price
-    global trailing_stop_flag, start_time, bars, strategy 
+    global trailing_stop_flag, start_time, bars, strategy, diff_threshold
 
     # Thresholds for post-profit fallback for BTC or ALTS
     if market == 'USDT-BTC': 
@@ -714,14 +700,7 @@ def to_the_moon(price_reached):
                     bars = td_info.stats(market, '30min', 50000, 10)    # updating bars info
                     
                 # Checking if we should sell on trailing stop. For BTC, valid if we are on setup down and current price is less than 1's high on more than 2.55%
-                # For alts - defined in the strategy 
-                if strategy == 'btc': 
-                    diff_threshold = 0.0255
-                elif strategy == 'alt-med': 
-                    diff_threshold = 0.045
-                elif strategy == 'alt-volatile': 
-                    diff_threshold = 0.055
-                
+                # % depends on the strategy (diff_threshold) 
                 if bars['td_down_1_high'].iloc[-1] is not None: 
                     diff = (bars['td_down_1_high'].iloc[-1] - price_last_moon)/bars['td_down_1_high'].iloc[-1]
                     lprint(["TD trailing stop check: lower than 1 red on (%)", diff*100])
@@ -857,7 +836,6 @@ def sell_now(at_price):
     # No need to wait here - we have sleep later in the cycle
     
     # Get balance
-    #balance = api.getbalance(currency)
     if simulation != True: 
         balance = getbalance(exchange, currency)
         # Correctly work with decimal numbers 
@@ -1177,15 +1155,17 @@ except:
             td_data_available = False 
 print "TD data availability:", td_data_available
 
-# Strategy 
+# Strategy and thresholds 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
     strategy = 'alt-med'
+    diff_threshold = 0.045
 elif currency == 'BTC': 
     strategy = 'btc'
+    diff_threshold = 0.0255
 else: 
     strategy = 'alt-volatile' 
+    diff_threshold = 0.055
 print "Price action strategy:", strategy
-
 
 # Creating new set to store previously executed orders 
 # Will be used to calculate the gainz 
@@ -1389,15 +1369,11 @@ try:
         
         # Launching workflow to buy and resume the task with same parameters
         # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
-        # changed price_entry to bb_price in the last param 
-        #
         # Changed new sl value to have tighter stop (*0.8): 2% -> 1.6%, as well as tp to more moderate (*0.8 too) 
-        
         # Changed consodering that tp and sl store price info and not %; removed making percent more stringent 
-        tp_price = bb_price*tp
-        sl_price = buy_back*sl
+        tp_price = bb_price * tp
+        sl_price = buy_back * (1 - diff_threshold)  # depending on the strategy 
         
-        #sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(float(tp_p*0.8), float(sl_p*0.8), 0, simulation_param, float(bb_price), exchange)
         sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange)
         wf_id, rows = query_lastrow_id(sql_string)       
 
