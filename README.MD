@@ -45,18 +45,18 @@ After registering your API keys on exchanges, you would need to specify them in 
 
 ### Setting a telegram bot 
 
-Currently, everyone needs to set their own environment which includes registering the telegram bot, setting its menu (if needed), and specifying tokens & chat id in the telegramlib.py. There are several comprehensive guides on the Internet related to this topic, including [the instructions from the telegram core](https://core.telegram.org/bots#botfather). When running, daemon.py supports the following commands sent in a Telegram chat: 
-- status: show running tasks
-- new: run a new take profit (trailing stop) / stop loss task 
-- abort: cancel running tasks 
-- workflow: launch a workflow which includes starting a buy task and then a take profit (trailing stop) / stop loss task 
-- balance: check your balances on exchanges; as I am from Australia, this is displaying balance in AUD through USDT which is not quite accurate
-- sellnow: sell a position from running tp/sl task immediately 
-- buy: initiate a buy tasks; various modes are supported (including buying in simulation, on breakout, in a regular mode, and immediately)
-- stopbuy: cancel an active buy task 
-- nlong: create a new record about a long-term holding without any buy/sell tasks
-- rmlong: delete records from longs table 
-- stoplistener: stop the monitoring bot 
+Currently, everyone needs to set their own environment which includes registering the telegram bot, setting its menu (if needed), and specifying tokens & chat id in the telegramlib.py. There are several comprehensive guides on the Internet related to this topic, including [the instructions from the telegram core](https://core.telegram.org/bots#botfather). When running, daemon.py supports the following commands sent in a Telegram chat (you can just copy and paste to botfather when configuring commands): 
+- status - show running tasks
+- new - run a new take profit (trailing stop) / stop loss task 
+- abort - cancel running tasks 
+- workflow - launch a workflow which includes starting a buy task and then a take profit (trailing stop) / stop loss task 
+- balance - check your balances on exchanges; as I am from Australia, this is displaying balance in AUD through USDT which is not quite accurate
+- sellnow - sell a position from running tp/sl task immediately 
+- buy - initiate a buy tasks; various modes are supported (including buying in simulation, on breakout, in a regular mode, and immediately)
+- stopbuy - cancel an active buy task 
+- nlong - create a new record about a long-term holding without any buy/sell tasks
+- rmlong - delete records from longs table 
+- stoplistener - stop the monitoring bot 
 
 ### Setting an environment 
 
