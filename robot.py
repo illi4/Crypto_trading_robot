@@ -189,6 +189,9 @@ sleep_sale = int(sleep_sale/speedrun)
 sleep_ticker = int(sleep_ticker/speedrun)
 candle_steps = int(candle_steps/speedrun)
 
+# To cancel buyback if there is an error and there were no sales made 
+cancel_buyback = False 
+
 ############# Start variables ###############
 main_curr_from_sell = 0     
 commission_total = 0        
@@ -229,9 +232,11 @@ def equal_or_decreasing(L):
 def process_stat(status): 
     global market
     global db, cur, job_id
+    global cancel_buyback 
     
     # Default flag returned
     flag = True
+    
     if status == 'stop':
         message = 'Finishing up normally'
         flag = False
@@ -244,16 +249,22 @@ def process_stat(status):
         send_notification('Error: Too small trade', 'Too small trade to perform, finishing up')
         cancel_orders(market)
         flag = False
+        cancel_buyback = True 
+        
     if status == 'no_idea': 
         message = 'Sell calls did not return proper answer, aborting'
         send_notification('Error: No response from sell calls', 'Sell calls did not return proper answer, aborting')
         cancel_orders(market)
         flag = False
+        cancel_buyback = True 
+        
     if status == 'abort_telegram': 
         message = 'Aborted as requested via Telegram'
         # send_notification('Task stopped', market + ' task stopped')
         cancel_orders(market)
         flag = False
+        cancel_buyback = True 
+        
     return flag, message
 
 ############# Getting several last prices in short intervals instead of just one 
@@ -1326,7 +1337,7 @@ try:
 except: 
     loss_id = None
 
-if stopped_mode == 'pre-profit': 
+if (stopped_mode == 'pre-profit') and (cancel_buyback == False): 
     # Using value of price_exit (actual sell price) minus 0.25%
     bb_price = price_exit * 0.9975
     lprint(["Setting buyback price as actual sell -0.25%. Price_exit:", price_exit, "bb_price", bb_price])
