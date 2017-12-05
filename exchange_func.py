@@ -31,7 +31,7 @@ def binance_ticker(market):
     for item in tickers:
        symbol = item['symbol']
        new_dict[symbol] = item['price']
-    return float(new_dict[market])
+    return Decimal(new_dict[market])
 
 
 def binance_openorder(market):
@@ -157,11 +157,20 @@ def binance_cancel(market, orderid):
         cancel_result = 'unknown order' 
     return cancel_result 
  
-def binance_selllimit(market, sell_q_step, price_to_sell):  # CHANGE (!) 
+def binance_selllimit(market, sell_q_step, price_to_sell):   
+    # Fixing issue with decimals and precision to avoid the precision error 
+    price_exchange = getticker('binance', market)
+    # print '>>Price exch:', price_exchange, str(price_exchange) 
+    len_use = len(str(price_exchange))  
+    price_to_sell = str(Decimal(price_to_sell)) 
+    # print 'Requested price to sell converted', price_to_sell # DEBUG 
+    price_to_sell = price_to_sell[:len_use]
+    # print "Revised length", price_to_sell # DEBUG 
+    
     market_str = market.split('-')
     market = market_str[1] + market_str[0]
+
     try: 
-        price_to_sell = Decimal(str(price_to_sell))     # str to preserve the same number of decimals 
         result = api_binance.create_order(symbol = market, quantity = sell_q_step, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
         result['uuid'] = result['orderId']  # for consistency in the main code 
     except binance_exceptions.BinanceAPIException as BalanceTooSmall:
@@ -185,6 +194,7 @@ def binance_selllimit(market, sell_q_step, price_to_sell):  # CHANGE (!)
         print "Creating New Order with quantity:", new_sell_qty
         try: 
             result = api_binance.create_order(symbol = market, quantity = new_sell_qty, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
+            print '>>> RESULT', result # DEBUG 
             result['uuid'] = result['orderId']  # for consistency in the main code 
         except:
             return 'MIN_TRADE_REQUIREMENT_NOT_MET'
@@ -192,9 +202,18 @@ def binance_selllimit(market, sell_q_step, price_to_sell):  # CHANGE (!)
     return result  
  
 def binance_buylimit(market, quantity_buy, buy_rate):    
+    # Fixing issue with decimals and precision to avoid the precision error 
+    price_exchange = getticker('binance', market)
+    # print '>>Price exch:', price_exchange, str(price_exchange) 
+    len_use = len(str(price_exchange))  
+    buy_rate = str(Decimal(buy_rate)) 
+    # print 'Requested price converted', buy_rate # DEBUG 
+    buy_rate = buy_rate[:len_use]
+    # print "Revised length", buy_rate # DEBUG 
+
     market_str = market.split('-')
     market = market_str[1] + market_str[0]
-    buy_rate = Decimal(str(buy_rate))     # str to preserve the same number of decimals 
+ 
     try: 
         result = api_binance.create_order(symbol = market, quantity = quantity_buy, price = buy_rate, side = 'BUY', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
         result['uuid'] = result['orderId']  # for consistency in the main code 
