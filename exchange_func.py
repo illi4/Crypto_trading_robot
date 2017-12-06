@@ -69,7 +69,7 @@ def binance_quantity_precise(market, quantity):
     stepsize = Decimal(str(stepsize))   
     quantity = Decimal(str(quantity))
     n_num = (quantity/stepsize).quantize(Decimal('1'))
-    quantity = stepsize * int(n_num) + stepsize  # weirdly enough, this solves the issue
+    quantity = stepsize * int(n_num) - stepsize  # weirdly enough, this solves the issue
     # print 'Stepsize', stepsize, ' qty ', quantity, ' n_num ', n_num   # DEBUG
  
     return quantity
