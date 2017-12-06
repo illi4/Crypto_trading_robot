@@ -69,7 +69,7 @@ def binance_quantity_precise(market, quantity):
     stepsize = Decimal(str(stepsize))   
     quantity = Decimal(str(quantity))
     n_num = (quantity/stepsize).quantize(Decimal('1'))
-    quantity = stepsize * int(n_num)
+    quantity = stepsize * int(n_num) + stepsize  # weirdly enough, this solves the issue
     # print 'Stepsize', stepsize, ' qty ', quantity, ' n_num ', n_num   # DEBUG
  
     return quantity
@@ -206,7 +206,7 @@ def binance_selllimit(market, sell_q_step, price_to_sell):
     
     market_str = market.split('-')
     market = market_str[1] + market_str[0]
-    
+
     try: 
         result = api_binance.create_order(symbol = market, quantity = sell_q_step, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
         result['uuid'] = result['orderId']  # for consistency in the main code 
@@ -219,25 +219,7 @@ def binance_selllimit(market, sell_q_step, price_to_sell):
     except binance_exceptions.BinanceOrderMinAmountException as e:
         print e
         return e 
-        ''' 
-        err_str = str(e)
-        position = err_str.find('a multiple of') + len('a multiple of') + 1
-        multiple_value = Decimal(err_str[position:])
-        sell_qty = Decimal(sell_q_step)
-        multiplier = 0
-        if sell_qty > multiple_value:
-            multiplier = int(sell_qty/multiple_value)
-        elif sell_qty < multiple_value:
-            multiplier = 1
-        new_sell_qty = multiplier * multiple_value
-        print "Creating New Order with quantity:", new_sell_qty
-        #try:    # HERE !!!!!! CHANGE BACK 
-        result = api_binance.create_order(symbol = market, quantity = new_sell_qty, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
-        print '>>> RESULT', result # DEBUG 
-        result['uuid'] = result['orderId']  # for consistency in the main code 
-        #except:
-        #    return 'MIN_TRADE_REQUIREMENT_NOT_MET'
-        ''' 
+
 
     return result  
  
@@ -470,4 +452,5 @@ def getorderbook(exchange, market):
     #     return bitfinex_orderbook(market)
     else:
         return 0  
+        
         
