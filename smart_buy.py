@@ -22,7 +22,7 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from loglib import logfile # logging
 import platformlib as platform  # detecting the OS and assigning proper folders 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances 
 
 print "Running..."
 
@@ -490,7 +490,7 @@ while buy_flag and approved_flag:
         sleep_timer = 0
     
     # Updating how much of source position (e.g. BTC) do we have left and placing a buy order if required
-    source_position = source_position - source_filled
+    source_position = Decimal(str(source_position)) - Decimal(str(source_filled))
     
     if approved_flag: 
         if fixed_price != 0:
@@ -506,6 +506,7 @@ while buy_flag and approved_flag:
     if fixed_price_flag != True:      
         sql_string = "UPDATE buys SET price = {} WHERE job_id = {}".format(price_curr, job_id)    
         rows = query(sql_string)
+   
     
     ### Price conditions with fixed price for different scenarios
     if (fixed_price_flag) and (fixed_price_starter != True): 
@@ -523,11 +524,12 @@ while buy_flag and approved_flag:
                     lprint([market, ': target price', fixed_price, 'reached and confirmed, start placing buy orders'])    
                 # Otherwise, we will continue in the next loop until we get confirmation on the reversal
             else: 
-                lprint([market, ': target price', fixed_price, 'not reached'])    
+                lprint([market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
                 
         ## If we are waiting for a breakout  - the logic is simple 
         if mode == 'brk':
             if price_curr >= breakout_target:  
+                lprint([market, ': breakout price', breakout_target, 'reached confirming.'])    
                 # Checking if we should buy or whether the price is jumping back
                 ensure_balance()
                 fixed_price_starter = ensure_buy()   
@@ -536,7 +538,7 @@ while buy_flag and approved_flag:
                     fixed_price = get_last_price(market)
                     lprint([market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
             else: 
-                lprint([market, ': breakout price', breakout_target, 'not reached'])    
+                lprint([market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
         
         ## If requested to buy now 
         if mode == 'now':
@@ -579,7 +581,7 @@ while buy_flag and approved_flag:
         if (fixed_price_flag and fixed_price_starter) or ((fixed_price_flag != True) and (float_price_starter)):                
             str_status = 'Used rate: {}'.format(buy_rate)  
             lprint([str_status])    
-            quantity = round(source_position/Decimal(str(buy_rate)), 4)
+            quantity = round(Decimal(source_position)/Decimal(str(buy_rate)), 4)
             str_status = 'Quantity to buy {}'.format(quantity)  
             lprint([str_status])    
             
@@ -655,7 +657,7 @@ rows = query(sql_string)
  
 if sum_quantity > 0: 
     if (wf_run_mode != 's') and (wf_run_mode != 'sns'):
-        avg_price = round(sum_paid / Decimal(str(sum_quantity)), 8)
+        avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)
         lprint(['Average price paid:', avg_price])    
     else:
         # If simulation

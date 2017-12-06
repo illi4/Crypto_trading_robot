@@ -41,7 +41,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 print "Initialising..."
 
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun =  1 # 1
+speedrun =  5 # 1
 
 #################### For Telegram integration ###############################################################
 chat = telegram()
@@ -1168,14 +1168,18 @@ job_id, rows = query_lastrow_id(sql_string)
 # td_curr_hour = strftime("%H", localtime())
 start_time = time.time()
 td_data_available = True  # default whick will be changed to False when needed  
-bars = td_info.stats(market, '30min', 10000, 10)    # should be 30 min for trailing stop and 1h for buyback 
 try: 
-    if bars == None: 
-        td_data_available = False 
-except: 
-    for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
-        if elem is None: 
+    bars = td_info.stats(market, '30min', 10000, 10)    # should be 30 min for trailing stop and 1h for buyback 
+    try: 
+        if bars == None: 
             td_data_available = False 
+    except: 
+        for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
+            if elem is None: 
+                td_data_available = False 
+except: 
+    td_data_available = False 
+    
 print "TD data availability:", td_data_available
 
 # Strategy and thresholds 

@@ -6,12 +6,15 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from time import localtime, strftime
 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
 
 # Telegram functions 
-TOKEN = "YOUR_TOKEN"    # Replace with your token 
+TOKEN = "448179496:AAHSv5-Wky_Y27OEFLLzgn6ZCwsdnOPXd4o"
+TOKEN_ALERTS = "477625930:AAHZ7tIN_ZXX2usBpYqAGvlMVKNBgFOGmGU"
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
+URL_ALERTS = "https://api.telegram.org/bot{}/".format(TOKEN_ALERTS)
+url_coinigy = "https://api.coinigy.com/api/v1/alerts"
 
 payload = ""
 headers = {
@@ -20,7 +23,7 @@ headers = {
     'content-type': "application/json"
     }
 
-chat_id = 000000000000  # Replace with your chat id  
+chat_id = 126501560  # my chat id 
 # Telegram monitoring interval  
 telegram_check_sec = 1
 

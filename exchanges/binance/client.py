@@ -362,3 +362,11 @@ class Client(object):
         :return:
         """
         return self._delete('userDataStream', False, data=params)
+        
+#### Additional function added to get ticksize and stepsize 
+    def exchangeInfo(self):
+        """
+        https://api.binance.com/api/v1/exchangeInfo
+        """
+        
+        return self._get('exchangeInfo')['symbols']
