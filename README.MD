@@ -18,7 +18,7 @@ The following scripts are used:
 - Exchange_func.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by the other script. Note that your API keys for exchanges should be specified there. 
 - Loglib.py is a library with a few logging functions 
 - Platformlib.py is a library to detect your OS and return proper folders to launch additional scripts
-- Price_logger.py gets price ticker from exchanges and saves data in price_log folder 
+- Price_logger.py gets price ticker for various exchanges from coinigy api and saves data in price_log folder 
 - Sqltools.py is used for working with workflow.db sqlite database
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators
 - Telegramlib.py works with telegram messages. Note that you would need to register a telegram bot and configure your tokens / chat id in this script. 
@@ -42,6 +42,8 @@ I was too busy writing the code and did not have enough time to document what lo
 ## How to set things up 
 
 After registering your API keys on exchanges, you would need to specify them in exchange_func.py. Also, if you want to use Telegram functionality, create a bot (via botfather), and configure your tokens and chat id in the telegramlib.py. 
+
+For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. Grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. 
 
 ### Setting a telegram bot 
 
@@ -74,7 +76,7 @@ Please use the scripts at your own risk. I am not responsible for your API keys 
 
 ## Contributions 
 
-As there are many other exchanges out there except for bittrex, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py (binance being the main priority currently). Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
+As there are many other exchanges out there except for bittrex and binance, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py (cobinhood will be an immediate priority). Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
 
 Please feel free to contribute on github directly or contact me first via Telegram (illi4).
 
