@@ -314,7 +314,7 @@ while True:
                         re_l_exchange = 'binance' 
                     elif re_l_exchange == 'btrx': 
                         re_l_exchange = 'bittrex' 
-                    re_l_curr_price = getticker(re_l_exchange, re_l_market)   
+                    re_l_curr_price = float(getticker(re_l_exchange, re_l_market))   
  
                     re_price_prop = round((re_l_curr_price/re_l_price)*100, 1)
                     reply_string_long += "{} ({}), current price: {} % of EP, Q: {}\n".format(re_l_market, re_l_exchange, re_price_prop, re_l_q)
@@ -351,6 +351,7 @@ while True:
             
             # >> Get balances from binance 
             balances = getbalances('binance')
+            exchange = 'binance'
             str_balance += 'Binance: \n'  
             try: 
                 for result in balances: 
@@ -366,8 +367,7 @@ while True:
                     if (round(balance_total, 3) > 0): 
                         if currency == 'USDT': 
                             market_symbol = currency + '-BTC' 
-                            exchange = 'binance'
-                            market_symbol_price = getticker(exchange, market_symbol)   
+                            market_symbol_price = float(getticker(exchange, market_symbol))
                             curr_btc_val = balance/market_symbol_price
                             balance_total_btc_val += curr_btc_val
                             str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)       
@@ -377,7 +377,7 @@ while True:
                             str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)   
                         else: 
                             market_symbol = 'BTC-' + currency 
-                            market_symbol_price = getticker(exchange, market_symbol)   
+                            market_symbol_price = float(getticker(exchange, market_symbol))   
                             curr_btc_val = market_symbol_price*balance 
                             balance_btc_val += curr_btc_val
                             balance_total_btc_val += market_symbol_price*balance_total
@@ -387,6 +387,7 @@ while True:
             
             # >> Getting the balances info from bittrex 
             balances = getbalances('bittrex')
+            exchange = 'bittrex'
             str_balance += '\nBittrex: \n'  
             
             # Sometimes results are not going through 
@@ -404,7 +405,6 @@ while True:
                     if (currency != 'USDT') and (currency != 'BTC') and (round(balance_total, 3) > 0): 
                         market_symbol = 'BTC-' + currency 
                         # if a different exchange is used 
-                        exchange = 'bittrex'
                         market_symbol_price = getticker(exchange, market_symbol)   
                         curr_btc_val = market_symbol_price*balance 
                         balance_btc_val += curr_btc_val

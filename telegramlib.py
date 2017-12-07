@@ -9,21 +9,10 @@ from time import localtime, strftime
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
 
 # Telegram functions 
-TOKEN = "448179496:AAHSv5-Wky_Y27OEFLLzgn6ZCwsdnOPXd4o"
-TOKEN_ALERTS = "477625930:AAHZ7tIN_ZXX2usBpYqAGvlMVKNBgFOGmGU"
-
+TOKEN = "your_token"
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
-URL_ALERTS = "https://api.telegram.org/bot{}/".format(TOKEN_ALERTS)
-url_coinigy = "https://api.coinigy.com/api/v1/alerts"
+chat_id = 1111111111111  # your chat id 
 
-payload = ""
-headers = {
-    'x-api-key': "002741b64ab83f8684bf1b819c61f791",
-    'x-api-secret': "7a987d3ab5e6e3b8d5e28ab2c5adce7b",
-    'content-type': "application/json"
-    }
-
-chat_id = 126501560  # my chat id 
 # Telegram monitoring interval  
 telegram_check_sec = 1
 
