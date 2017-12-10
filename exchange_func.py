@@ -11,7 +11,7 @@ from time import localtime, strftime
 import math
 
 import decimal
-from decimal import Decimal
+from decimal import Decimal, getcontext
 # Decimal precision
 decimal.getcontext().prec = 20
 
@@ -20,7 +20,6 @@ api = bittrex('key1', 'key2')
 api_binance = Client('key1', 'key2')    
 api_bitfinex = Client_bitfinex()
 api_bitfinex_trade = TradeClient('key1', 'key2')
-
 
 # Binance functions
 def binance_ticker(market): 
@@ -65,14 +64,16 @@ def binance_quantity_precise(market, quantity):
     # Converting the quantity. Stepsize is something like '0.0010000'
     getcontext().rounding = 'ROUND_DOWN'
     # Fixes the issues 
-    stepsize = Decimal(stepsize) * 10 
-    stepsize = Decimal(str(stepsize))   
+    stepsize = Decimal(stepsize) # * 10 
+    stepsize = Decimal(str(stepsize))  
+    quantity_orig = Decimal(str(quantity))    
     quantity = Decimal(str(quantity))
     n_num = (quantity/stepsize).quantize(Decimal('1'))
     quantity = stepsize * int(n_num) - stepsize  # weirdly enough, this solves the issue
     # print 'Stepsize', stepsize, ' qty ', quantity, ' n_num ', n_num   # DEBUG
+
  
-    return quantity
+    return quantity, stepsize
     
     
 def binance_openorder(market):
@@ -202,67 +203,75 @@ def binance_selllimit(market, sell_q_step, price_to_sell):
 
     # Different approach to work with precision 
     price_to_sell = binance_price_precise(market, price_to_sell)
-    sell_q_step = binance_quantity_precise(market, sell_q_step)
+    sell_q_step, mult = binance_quantity_precise(market, sell_q_step)
     
     market_str = market.split('-')
     market = market_str[1] + market_str[0]
 
-    try: 
-        result = api_binance.create_order(symbol = market, quantity = sell_q_step, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
-        result['uuid'] = result['orderId']  # for consistency in the main code 
-    except binance_exceptions.BinanceAPIException as BalanceTooSmall:
-        print BalanceTooSmall
-        return BalanceTooSmall
-    except binance_exceptions.BinanceOrderMinTotalException as TradeSizeTooSmall:
-        print TradeSizeTooSmall
-        return TradeSizeTooSmall
-    except binance_exceptions.BinanceOrderMinAmountException as e:
-        print e
-        return e 
+    finish = False 
+    msg = '' 
+    counter = 0 
+    
+    while finish is False: #weird issue
+        try:
+            sell_q_step = sell_q_step - counter*mult
+            result = api_binance.create_order(symbol = market, quantity = sell_q_step, price = price_to_sell, side = 'SELL', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
+            result['uuid'] = result['orderId']  # for consistency in the main code 
+            finish = True
+        except binance_exceptions.BinanceOrderMinAmountException as e:
+             counter += 1 
+             pass
+        except binance_exceptions.BinanceAPIException as BalanceTooSmall:
+            print BalanceTooSmall
+            finish = True 
+            msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+        except binance_exceptions.BinanceOrderMinTotalException as TradeSizeTooSmall:
+            print TradeSizeTooSmall
+            finish = True 
+            msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+    
+    if msg <> '': 
+        return msg 
+    else: 
+       return result
 
-
-    return result  
- 
+       
 def binance_buylimit(market, quantity_buy, buy_rate):    
  
     # Different approach to work with precision 
     buy_rate = binance_price_precise(market, buy_rate)
-    quantity_buy = binance_quantity_precise(market, quantity_buy)
+    quantity_buy, mult = binance_quantity_precise(market, quantity_buy)
 
     market_str = market.split('-')
     market = market_str[1] + market_str[0]
- 
-    try: 
-        result = api_binance.create_order(symbol = market, quantity = quantity_buy, price = buy_rate, side = 'BUY', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
-        result['uuid'] = result['orderId']  # for consistency in the main code 
-    except binance_exceptions.BinanceAPIException as BalanceTooSmall:
-        print BalanceTooSmall
-        return BalanceTooSmall
-    except binance_exceptions.BinanceOrderMinTotalException as TradeSizeTooSmall:
-        print TradeSizeTooSmall
-        return TradeSizeTooSmall
-    except binance_exceptions.BinanceOrderMinAmountException as e:
-        print e
-        return e
-        '''
-        err_str = str(e)
-        position = err_str.find('a multiple of') + len('a multiple of') + 1
-        multiple_value = Decimal(err_str[position:])
-        buy_qty = Decimal(quantity_buy)
-        multiplier = 0
-        if buy_qty > multiple_value:
-            multiplier = int(buy_qty/multiple_value)
-        elif buy_qty < multiple_value:
-            multiplier = 1
-        new_buy_qty = multiplier * multiple_value
-        print "Creating New Order with quantity:", new_buy_qty
-        try: 
-            result = api_binance.create_order(symbol = market, quantity = new_buy_qty, price = buy_rate, side = 'BUY', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
+
+    finish = False 
+    msg = '' 
+    counter = 0 
+    
+    while finish is False: #weird issue
+        try:
+            quantity_request = quantity_buy - counter*mult
+            result = api_binance.create_order(symbol = market, quantity = quantity_request, price = buy_rate, side = 'BUY', type = 'LIMIT', timestamp = time.time(), timeInForce = 'GTC')
             result['uuid'] = result['orderId']  # for consistency in the main code 
-        except:
-            return 'MIN_TRADE_REQUIREMENT_NOT_MET'
-        ''' 
-    return result  
+            finish = True
+        except binance_exceptions.BinanceOrderMinAmountException as e:
+             counter += 1 
+             pass
+        except binance_exceptions.BinanceAPIException as BalanceTooSmall:
+            print BalanceTooSmall
+            finish = True 
+            msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+        except binance_exceptions.BinanceOrderMinTotalException as TradeSizeTooSmall:
+            print TradeSizeTooSmall
+            finish = True 
+            msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+    
+    if msg <> '': 
+        return msg 
+    else: 
+       return result
+ 
  
 ## Bitfinex functions - decided not to finalise 
 def bitfinex_ticker(market):
@@ -452,5 +461,4 @@ def getorderbook(exchange, market):
     #     return bitfinex_orderbook(market)
     else:
         return 0  
-        
         

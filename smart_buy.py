@@ -9,6 +9,7 @@ import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 import urllib2
+import decimal
 from decimal import Decimal
 from openpyxl import Workbook, load_workbook   
 from openpyxl.styles import Font, Fill
@@ -23,6 +24,10 @@ from loglib import logfile # logging
 import platformlib as platform  # detecting the OS and assigning proper folders 
 # Universal functions for all exchanges 
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances 
+
+# Decimal precision and roubding 
+decimal.getcontext().prec = 25
+decimal.getcontext().rounding = 'ROUND_DOWN'
 
 print "Running..."
 
@@ -445,7 +450,7 @@ while buy_flag and approved_flag:
         lprint(['>>> Cancelling:' , buy_uuid, exchange, market])    
         cancel_stat = cancel(exchange, market, buy_uuid)
         time.sleep(10) # wait for it to be cancelled  - 10 sec
-        #order_info = api.getorder(buy_uuid)
+ 
         order_info = getorder(exchange, market, buy_uuid)
         # print 'Order info:', order_info
         buy_uuid = None 
@@ -556,9 +561,13 @@ while buy_flag and approved_flag:
         lprint(["Buy trigger", float_price_starter])
                           
     # Checking how much is left to buy and setting the price
-    # cannot do this with Decimals; float precision is fine here
-    if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag):       
-        
+    # REWORKED to proper Decimals 
+    #if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag):       
+    ratio = source_filled/source_position
+    ratio = ratio.quantize(Decimal('1.01'))
+
+    if (ratio > 0.01 or ratio == 0) and (approved_flag):           
+    
         # If we are using market price (smartbuy)
         if fixed_price_flag != True:      
             # Getting prices if we have not specified a fixed one 
