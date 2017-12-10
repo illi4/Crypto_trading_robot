@@ -266,7 +266,10 @@ def binance_buylimit(market, quantity_buy, buy_rate):
             print TradeSizeTooSmall
             finish = True 
             msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
-    
+        except:
+            finish = True 
+            msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+            
     if msg <> '': 
         return msg 
     else: 

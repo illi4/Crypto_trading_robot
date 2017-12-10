@@ -614,7 +614,7 @@ while buy_flag and approved_flag:
                     # Issues with buying 
                     buy_flag = False 
                     wf_id = None
-                    chat.send('Issues with buying on the ' + market)
+                    chat.send('Issues with buying on the ' + market)    # can be related to too low buy
         
         # Number of orders to check 
 
