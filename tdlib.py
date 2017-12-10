@@ -12,7 +12,7 @@ class tdlib(object):
         self.public = ['stats']
         
     def stats(self, market, period = '1h', nentries = 100000, tail = 10):
-        # example period = '5min' , '1h' 
+        # example period = '5min' 
         filename = 'price_log/' + market + '.csv'
         try: 
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')

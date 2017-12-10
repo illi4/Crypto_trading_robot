@@ -9,6 +9,7 @@ from time import localtime, strftime
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
 
 # Telegram functions 
+<<<<<<< HEAD
 TOKEN = "token"
 
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
@@ -19,8 +20,12 @@ headers = {
     'x-api-secret': "secret",
     'content-type': "application/json"
     }
+=======
+TOKEN = "your_token"
+URL = "https://api.telegram.org/bot{}/".format(TOKEN)
+chat_id = 1111111111111  # your chat id 
+>>>>>>> origin/master
 
-chat_id = 126501560  # my chat id 
 # Telegram monitoring interval  
 telegram_check_sec = 1
 

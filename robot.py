@@ -18,8 +18,9 @@ import json # requests
 from shutil import copyfile # to copy files
 import numpy as np
 
-# Decimal precision
+# Decimal precision and roubding 
 decimal.getcontext().prec = 25
+decimal.getcontext().rounding = 'ROUND_DOWN'
 
 ## Custom libraries 
 from telegramlib import telegram # my lib to work with Telegram
@@ -41,7 +42,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 print "Initialising..."
 
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun =  5 # 1
+speedrun =  1 # 1
 
 #################### For Telegram integration ###############################################################
 chat = telegram()
@@ -524,30 +525,46 @@ def buy_back(price_base):
             # Should not be buying on 1h setup 8 or 9
             if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]): 
                 if bars['td_up_2_cl_abv_1'].iloc[-1]:    
+                    lprint(["Initial conditions for TD buy back met, checking if the current price is higher and checking 4h"])
                     # For btc - the current is higher than previous green close plus 0.5%, consider modifying the strategy 
                     if strategy == 'btc': 
                         if price_upd > bars['td_up_2_close'].iloc[-1]*1.005: 
                             # Additionally (verified on BTC): last 4H should not be red 
                             lprint(["Getting 4H TD"])
-                            bars = td_info.stats(market, '4h', 50000, 5)    # updating bars info
-                            if bars['td_direction'].iloc[-1] == 'up': 
+                            bars4h = td_info.stats(market, '4h', 50000, 5)    # updating bars info
+                            # Just in case checking 4H data availability. If there are NaNs, we should not be using it 
+                            num_null = bars4h['open'].isnull().sum()
+                            if num_null > 0: 
                                 bback_result = True 
                                 flag_reb_c = False 
-                                lprint(["TD buyback initiated"])
-                            else: 
-                                lprint(["4H TD is bearish"])
+                                lprint(["TD buyback initiated based on 1h, there is no enough 4h data"])
+                            else:     
+                                if bars4h['td_direction'].iloc[-1] == 'up': 
+                                    bback_result = True 
+                                    flag_reb_c = False 
+                                    lprint(["TD buyback initiated"])
+                                else: 
+                                    lprint(["4H TD is bearish"])
                     # For alts - the current is higher than previous green close plus 1.5%, consider modifying the strategy 
                     else: 
                         if price_upd > (bars['close'].iloc[-1])*1.015: 
                             # Additionally (verified on BTC): last 4H should not be red 
                             lprint(["Getting 4H TD"])
-                            bars = td_info.stats(market, '4h', 50000, 5)    # updating bars info
-                            if bars['td_direction'].iloc[-1] == 'up': 
+                            bars4h = td_info.stats(market, '4h', 50000, 5)    # updating bars info
+                            # Just in case checking 4H data availability. If there are NaNs, we should not be using it 
+                            num_null = bars4h['open'].isnull().sum()
+                            if num_null > 0: 
                                 bback_result = True 
                                 flag_reb_c = False 
-                                lprint(["TD buyback initiated"])
-                            else: 
-                                lprint(["4H TD is bearish"])    
+                                lprint(["TD buyback initiated based on 1h, there is no enough 4h data"])
+                            else:     
+                                if bars4h['td_direction'].iloc[-1] == 'up': 
+                                    bback_result = True 
+                                    flag_reb_c = False 
+                                    lprint(["TD buyback initiated"])
+                                else: 
+                                    lprint(["4H TD is bearish"])
+ 
 
             # There is no need to collect prices every 30 seconds for this if we are based on 1-h time indicators
             if flag_reb_c: 
@@ -727,6 +744,7 @@ def to_the_moon(price_reached):
                 if bars['td_down_1_high'].iloc[-1] is not None: 
                     diff = (bars['td_down_1_high'].iloc[-1] - price_last_moon)/bars['td_down_1_high'].iloc[-1]
                     lprint(["TD trailing stop check: lower than 1 red on (%)", diff*100])
+                    lprint(["Diff:", diff, "diff_threshold:", diff_threshold])
                     if diff > diff_threshold: 
                         sale_trigger = True 
                     else: 
@@ -1167,9 +1185,10 @@ job_id, rows = query_lastrow_id(sql_string)
 
 # td_curr_hour = strftime("%H", localtime())
 start_time = time.time()
-td_data_available = True  # default whick will be changed to False when needed  
+td_data_available = True  # default which will be changed to False when needed  
 try: 
-    bars = td_info.stats(market, '30min', 10000, 10)    # should be 30 min for trailing stop and 1h for buyback 
+    # should be 30 min for trailing stop and 1h for buyback. checking larger interval here fof NaNs
+    bars = td_info.stats(market, '1h', 10000, 10)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -1177,10 +1196,20 @@ try:
         for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
             if elem is None: 
                 td_data_available = False 
+        num_null = bars['open'].isnull().sum()
+        if num_null > 0: 
+            td_data_available = False 
 except: 
     td_data_available = False 
     
 print "TD data availability:", td_data_available
+
+# Updating because we need 30 minutes intervals for stops 
+if td_data_available: 
+    print "Please wait while updating the TD data"
+    bars = td_info.stats(market, '30min', 10000, 10) 
+    
+#############################################################
 
 # Strategy and thresholds 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 

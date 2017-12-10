@@ -23,14 +23,39 @@ from telegramlib import telegram # my lib to work with Telegram
 import platformlib as platform  # detecting the OS and assigning proper folders 
 from coinigylib import coinigy
 
+<<<<<<< HEAD
 coinigy = coinigy()
 chat = telegram()
+=======
+chat = telegram()
+
+def coinigy_price(ticker, exchange): 
+
+    values =  {
+        "exchange_code": exchange, 
+        "exchange_market": ticker
+      }
+      
+    req = urllib2.Request('https://api.coinigy.com/api/v1/ticker')
+    req.add_header('x-api-key', "key1")
+    req.add_header('x-api-secret', "key2")
+    req.add_header('content-type', "application/json")
+
+    response = urllib2.urlopen(req, json.dumps(values)).read()
+    json_resp = json.loads(response)
+    return json_resp['data'][0]['last_trade']
+    
+>>>>>>> origin/master
     
 def append_line(data, filename):    
     with open(filename, 'ab') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(data)    
     
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/master
 # List of cryptos to monitor   
 markets_dict = {
 'USDT-USD': 'KRKN', 
@@ -63,6 +88,7 @@ usdt_count = 0
 usdt_price_arr = np.ones(15) #15 1-min values 
 usdt_collapse = False 
 
+<<<<<<< HEAD
 # Failed timer milestone 
 for elem, exch_use in markets_dict.iteritems(): 
     time_failed[elem] =  time.time()
@@ -73,12 +99,24 @@ while True: # Logging the prices and checking what is up with USDT
     # Timers on the start
     start_time = time.time()
     
+=======
+
+while True: # Logging the prices and checking what is up with USDT 
+
+    # Timer 
+    start_time = time.time()
+                
+>>>>>>> origin/master
     # Updating crypto prices 
     for elem, exch_use in markets_dict.iteritems(): 
     
         elem_ticker = elem.replace('-', '/') 
         try: 
+<<<<<<< HEAD
             price = coinigy.price(elem_ticker, exch_use)
+=======
+            price = coinigy_price(elem_ticker, exch_use)
+>>>>>>> origin/master
         except: 
             price = None 
         timestamp = time.time()
@@ -138,6 +176,7 @@ while True: # Logging the prices and checking what is up with USDT
             failed_attempts_dict[elem] += 1
             # Logging issues 
             append_line([date_time, elem, exch_use], 'price_log_issues.csv')
+<<<<<<< HEAD
                
             if failed_attempts_dict[elem] >= 5: 
                 time_failed_diff = time_failed[elem] - time.time()
@@ -145,6 +184,11 @@ while True: # Logging the prices and checking what is up with USDT
                     chat.send("Cannot get the price of " + elem + " for 10 minutes and 5 times in a row")
                     failed_attempts_dict[elem] = 0 
                     time_failed[elem] = time.time()
+=======
+            if failed_attempts_dict[elem] >= 5: 
+                chat.send("Cannot get the price of " + elem + " for several minutes")
+                failed_attempts_dict[elem] = 0 
+>>>>>>> origin/master
     # Timer 
     time_now = time.time() 
     time_diff = (math.ceil(time_now - start_time)) 
