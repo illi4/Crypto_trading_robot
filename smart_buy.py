@@ -563,7 +563,7 @@ while buy_flag and approved_flag:
     # Checking how much is left to buy and setting the price
     # REWORKED to proper Decimals 
     #if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag):       
-    ratio = source_filled/source_position
+    ratio = Decimal(source_filled/source_position)
     ratio = ratio.quantize(Decimal('1.01'))
 
     if (ratio > 0.01 or ratio == 0) and (approved_flag):           
