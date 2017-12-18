@@ -443,6 +443,7 @@ sum_paid = 0
 sum_quantity = 0
 approved_flag = True
 source_filled = 0
+issues_notify = True 
 
 # Main cycle  
 while buy_flag and approved_flag: 
@@ -617,9 +618,11 @@ while buy_flag and approved_flag:
                     buy_uuid = buy_result['uuid']
                     lprint(['>> Placed order', buy_uuid])    
                 except: 
-                    # Issues with buying 
+                    # Issues with buying - notify only once and keep trying 
                     # May happen wit successful result - commented for troubleshooting
-                    chat.send('Issues with buying on the ' + market + ' on the exchange ' + exchange + '. Result: ' + buy_result)      
+                    if issues_notify: 
+                        issues_notify = False 
+                        chat.send('Issues with buying on the ' + market + ' on the exchange ' + exchange + '. Result: ' + buy_result)      
                     ''' 
                     buy_flag = False 
                     wf_id = None
@@ -628,7 +631,6 @@ while buy_flag and approved_flag:
                     ''' 
         
         # Number of orders to check 
-
         ''' # Old approach 
         if orders_check == 7: 
             orders_check -= 2
