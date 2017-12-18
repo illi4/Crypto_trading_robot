@@ -99,7 +99,7 @@ try:
         exit(0)
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
-        comission_rate = 0.0025
+        comission_rate = 0.003
     elif exchange_abbr == 'bnc': 
         exchange = 'binance' 
         comission_rate = 0.001
@@ -521,51 +521,40 @@ def buy_back(price_base):
             
             # Checking if we should buy back. For BTC, valid if: 
             # 1. We are on the TD setup up, 
-            # 2. A candle with number 2 closes above 1, and the current price is above 2nd close 
+            # 2. A candle with number 2 closes above 1, and the current price is above 2nd close (or > 3 and next is closing before previous)
             # Should not be buying on 1h setup 8 or 9
-            if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]): 
-                if bars['td_up_2_cl_abv_1'].iloc[-1]:    
-                    lprint(["Initial conditions for TD buy back met, checking if the current price is higher and checking 4h"])
-                    # For btc - the current is higher than previous green close plus 0.5%, consider modifying the strategy 
-                    if strategy == 'btc': 
-                        if price_upd > bars['td_up_2_close'].iloc[-1]*1.005: 
-                            # Additionally (verified on BTC): last 4H should not be red 
-                            lprint(["Getting 4H TD"])
-                            bars4h = td_info.stats(market, '4h', 50000, 5)    # updating bars info
-                            # Just in case checking 4H data availability. If there are NaNs, we should not be using it 
-                            num_null = bars4h['open'].isnull().sum()
-                            if num_null > 0: 
+            if strategy == 'btc': 
+                target_prop = 1.004
+            else: 
+                target_prop = 1.015
+            
+            if (bars['td_up_2_close'].iloc[-1] is not None) and (time_elapsed > 60) and (bars['td_setup'].iloc[-1] not in [8, 9]):              
+                # Strategy modification - either 2 closes above 1 plus threshold OR 
+                # 3 / 4 / 5 / 6 / 7 closes before previous plus threshold 
+                if ((bars['td_up_2_cl_abv_1'].iloc[-1]) or 
+                ((bars['td_setup'].iloc[-1] > 2) and (bars['close'].iloc[-1] > (bars['close'].iloc[-2])*target_prop) )):  
+                    lprint(["Initial conditions for TD buy back met, checking if the current price is higher and checking 2h"])
+                    # The current is higher than previous green close plus threshold 
+                    if price_upd > bars['td_up_2_close'].iloc[-1]*target_prop: 
+                        # Additionally (verified on BTC): last 2H should not be red 
+                        lprint(["Getting 2H TD"])
+                        bars2h = td_info.stats(market, '2h', 50000, 5)    # updating bars info
+                        # Just in case checking 2H data availability. If there are NaNs, we should not be using it 
+                        num_null = bars2h['open'].isnull().sum()
+                        if num_null > 0: 
+                            bback_result = True 
+                            flag_reb_c = False 
+                            lprint(["TD buyback initiated based on 1h, there is no enough 2h data"])
+                        else:     
+                            if bars2h['td_direction'].iloc[-1] == 'up': 
                                 bback_result = True 
                                 flag_reb_c = False 
-                                lprint(["TD buyback initiated based on 1h, there is no enough 4h data"])
-                            else:     
-                                if bars4h['td_direction'].iloc[-1] == 'up': 
-                                    bback_result = True 
-                                    flag_reb_c = False 
-                                    lprint(["TD buyback initiated"])
-                                else: 
-                                    lprint(["4H TD is bearish"])
-                    # For alts - the current is higher than previous green close plus 1.5%, consider modifying the strategy 
+                                lprint(["TD buyback initiated"])
+                            else: 
+                                lprint(["2H TD is bearish"])
                     else: 
-                        if price_upd > (bars['close'].iloc[-1])*1.015: 
-                            # Additionally (verified on BTC): last 4H should not be red 
-                            lprint(["Getting 4H TD"])
-                            bars4h = td_info.stats(market, '4h', 50000, 5)    # updating bars info
-                            # Just in case checking 4H data availability. If there are NaNs, we should not be using it 
-                            num_null = bars4h['open'].isnull().sum()
-                            if num_null > 0: 
-                                bback_result = True 
-                                flag_reb_c = False 
-                                lprint(["TD buyback initiated based on 1h, there is no enough 4h data"])
-                            else:     
-                                if bars4h['td_direction'].iloc[-1] == 'up': 
-                                    bback_result = True 
-                                    flag_reb_c = False 
-                                    lprint(["TD buyback initiated"])
-                                else: 
-                                    lprint(["4H TD is bearish"])
- 
-
+                        lprint(["The price is below the close of 1H 2 plus threshold"])    
+    
             # There is no need to collect prices every 30 seconds for this if we are based on 1-h time indicators
             if flag_reb_c: 
                 time.sleep(300) # sleeping for 5 minutes
@@ -732,6 +721,7 @@ def to_the_moon(price_reached):
                     
              ## If we have TD data        
             else: 
+                sale_trigger = False  # Default 
                 time_now = time.time()
                 time_diff = (math.ceil(time_now - start_time))/60    # timer in minutes 
                 if time_diff > 10:  # updating every 10 minutes 
@@ -1428,7 +1418,7 @@ try:
         # Changed new sl value to have tighter stop (*0.8): 2% -> 1.6%, as well as tp to more moderate (*0.8 too) 
         # Changed consodering that tp and sl store price info and not %; removed making percent more stringent 
         tp_price = bb_price * tp
-        sl_price = buy_back * (1 - diff_threshold)  # depending on the strategy 
+        sl_price = bb_price * (1 - diff_threshold)  # depending on the strategy 
         
         sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange)
         wf_id, rows = query_lastrow_id(sql_string)       

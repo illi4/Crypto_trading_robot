@@ -336,8 +336,14 @@ def ensure_balance():
             balance_stopper = False 
             
         # If we need to switch for commission
-        if (balance_avail >= source_position) and (balance_avail*0.9975 < source_position): 
-            source_position = balance_avail*0.9975
+        # For some reason does not work fine for bittrex 
+        if exchange == 'bittrex': 
+            comission_rate = 0.003     
+        elif exchange == 'binance': 
+            comission_rate = 0.001   
+        
+        if (balance_avail >= source_position) and (balance_avail*(1 - comission_rate) < source_position): 
+            source_position = balance_avail*(1 - comission_rate)
             lprint(['Changed source_position to handle commission to', source_position])  
             
         while balance_stopper: 
@@ -605,16 +611,21 @@ while buy_flag and approved_flag:
             else:
                 buy_result = buylimit(exchange, market, quantity, buy_rate)  
                 print 'Quantity {} buy_rate {}'.format(quantity, buy_rate) #DEBUG
-                # print buy_result #DEBUG
+                print "Result", buy_result #DEBUG
                 
                 try: 
                     buy_uuid = buy_result['uuid']
                     lprint(['>> Placed order', buy_uuid])    
                 except: 
                     # Issues with buying 
+                    # May happen wit successful result - commented for troubleshooting
+                    chat.send('Issues with buying on the ' + market + ' on the exchange ' + exchange + '. Result: ' + buy_result)      
+                    ''' 
                     buy_flag = False 
                     wf_id = None
-                    chat.send('Issues with buying on the ' + market)    # can be related to too low buy
+                    # Commented as this was notifying about issues when zero quantity was left 
+                    # chat.send('Issues with buying on the ' + market)
+                    ''' 
         
         # Number of orders to check 
 
