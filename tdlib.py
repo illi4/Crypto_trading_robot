@@ -11,9 +11,10 @@ class tdlib(object):
     def __init__(self):
         self.public = ['stats']
         
-    def stats(self, market, period = '1h', nentries = 100000, tail = 10):
+    def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10):
         # example period = '5min' 
-        filename = 'price_log/' + market + '.csv'
+        filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'
+
         try: 
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
         except: 

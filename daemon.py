@@ -47,12 +47,13 @@ def telegram_buy(wf_id = None):
     global platform_run, cmd_init_buy, chat
     print cmd_init_buy 
     
-    reply_string = 'Specify the parameters: \nmode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n\n'\
+    reply_string = 'Specify the parameters (e.g. "4h btrx usdt btc 7957") \nmode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n\n'\
     '>>Example: reg btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes,'\
-    'then switches to market prices \n\nModes: reg/brk/now/reg-s/brk-s \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
+    'then switches to market prices \n\nModes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
     'options with -s mean simulation mode \n'\
+    '4h buys based on 4h price action \n'\
     'now buys immediately in real mode (or in simulation if there is simulation workflow) \n\n'\
-    'Exchanges: btrx, bnc (bittrex, binance)'
+    'Exchanges: btrx, bina (bittrex, binance)'
     
     chat.send(reply_string)
     # Wait for a response
@@ -313,7 +314,7 @@ while True:
                     re_l_price = row[2]
                     re_l_q = row[3]
                     re_l_exchange = row[4]
-                    if re_l_exchange == 'bnc': 
+                    if re_l_exchange == 'bina': 
                         re_l_exchange = 'binance' 
                     elif re_l_exchange == 'btrx': 
                         re_l_exchange = 'bittrex' 
@@ -337,6 +338,8 @@ while True:
         
         ########## Balances info
         elif msg_text.find('balance') >= 0: 
+            
+            ''' # Old code replaced by coinigy stuff 
             # Response string 
             str_balance = '' 
             # Prepare 
@@ -440,6 +443,17 @@ while True:
             
             # Send the response
             chat.send(str_balance) 
+            ''' 
+            # May not work if there are too many requests 
+            retry = True 
+            while retry: 
+                try: 
+                    str_balance = coinigy.balances()
+                    chat.send(str_balance) 
+                    retry = False 
+                except: 
+                    print "Seems like too many requests, retrying"
+                    time.sleep(0.5)
             
         ########### Aborting tasks
         elif msg_text.find('abort') >= 0: 
@@ -616,9 +630,9 @@ while True:
                     chat.send('Incorrect run mode specified')
                 else:
                     wf_exchange = msg_text_split[1]
-                    if wf_exchange not in ['btrx', 'bnc']: 
-                        print 'Incorrect exchange specified (should be btrx or bnc)\n\n'
-                        chat.send('Incorrect exchange specified')
+                    if wf_exchange not in ['btrx', 'bina']: 
+                        print 'Incorrect exchange specified (should be btrx or bina)\n\n'
+                        chat.send('Incorrect exchange specified (should be btrx or bina)')
                     else: 
                         # if ok 
                         wf_tp = msg_text_split[2]

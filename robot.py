@@ -94,13 +94,13 @@ try:
 
     # Exchange 
     exchange_abbr = argv[2].lower()
-    if exchange_abbr not in ['btrx', 'bnc']: 
-        print 'Incorrect exchange specified (should be btrx or bnc)\n\n'
+    if exchange_abbr not in ['btrx', 'bina']: 
+        print 'Incorrect exchange specified (should be btrx or bina)\n\n'
         exit(0)
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
         comission_rate = 0.003
-    elif exchange_abbr == 'bnc': 
+    elif exchange_abbr == 'bina': 
         exchange = 'binance' 
         comission_rate = 0.001
 
@@ -135,8 +135,8 @@ except:
 if no_input:
     print '----------------------------------------------------------------------------------------------\n' + \
     'Run parameters not specified. Restart the script using:\n' + \
-    'robot.py exchange simulation (s/r/sns/rns) basic_curr altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion]\n' +\
-    'Example: > python robot.py btrx s BTC LTC 0.0017 0.0021 0.0015 100\n\n' +\
+    'robot.py simulation (s/r/sns/rns) exchange basic_curr altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion]\n' +\
+    'Example: > python robot.py s btrx BTC LTC 0.0017 0.0021 0.0015 100\n\n' +\
     'Modes:\n>s (simulation with stop-loss)\n>r (real mode with stop-loss)\n>sns (simulation and stop only on profit)\n>rns (real and stop only on profit)'  
     exit(0) 
     
@@ -181,7 +181,7 @@ steps_ticker = 3
 sleep_ticker = 10 # So that ticker in total takes 30 seconds 
 
 # Steps and timer for buybacks 
-candle_steps = 100
+candle_steps = 80 # 100 for 5 min, 80 for 4
 candle_sleep = 2.8 # Tested, 3 sec lead to having ~5 min 30 sec in between 
 
 # sleep_confirm_sale = int(sleep_confirm_sale/speedrun)
@@ -422,9 +422,9 @@ def check_bb_flag():
     return bool(bb_flag)
 
     
-# Looking for rebuy points (buyback) v2 
+# Looking for rebuy points (buyback) v3, based on 4h 
 def buy_back(price_base): 
-    global bb_id, market 
+    global bb_id, market, exchange_abbr
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     
     flag_reb_c = True 
@@ -484,10 +484,50 @@ def buy_back(price_base):
             
     # If there is TD data   
     else: 
+        # Update to set stops according to 4H candles and TD 
+        if td_first_run: 
+            td_first_run = False 
+            bars = td_info.stats(market, exchange_abbr, '4h', 50000, 10)    # updating bars info here 
+            time_hour = time.strftime("%H")
+     
+        while flag_reb_c: 
+            # Checking the need to update 
+            time_hour_update = time.strftime("%H")
+            if (time_hour_update <> time_hour): 
+                # Updating the current hour and the TD values 
+                time_hour = time_hour_update
+                bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)     
+        
+            # Check if we need to cancel 
+            stop_bback = check_bb_flag()
+            if stop_bback: 
+                bback_result = False 
+                flag_reb_c = False 
+            
+            # Checking time elapsed from the start of buyback 
+            time_elapsed = (math.ceil(time.time() - time_bb_initiated ))/60    
+
+            # Getting the current price 
+            price_upd = get_last_price(market)
+            lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "Time elapsed (min):", time_elapsed, "Current price:", price_upd ])        
+
+            # Updating DB
+            if bb_id is not None: 
+                sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
+                rows = query(sql_string)
+            
+            # Checking if we should buy back: this happens when the price is above a bullish setup 
+            if (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > bars['close'].iloc[-1]):  
+                bback_result = True 
+                flag_reb_c = False 
+                lprint(["TD buyback initiated"])
+            
+            
+    '''  # Previous version    
         # Updating bars if this is a first run 
         if td_first_run: 
             td_first_run = False 
-            bars = td_info.stats(market, '1h', 50000, 10)    # updating bars info here because trailing stop uses 30min
+            bars = td_info.stats(market, exchange_abbr, '1h', 50000, 10)    # updating bars info here because trailing stop uses 30min
             start_time = time.time()
 
         # Running until need to cancel 
@@ -498,7 +538,7 @@ def buy_back(price_base):
             if time_diff > 10:  # updating the dataframe every 10 minutes 
                 lprint(["Updating TD info using the current prices"])
                 start_time = time_now
-                bars = td_info.stats(market, '1h', 50000, 10)    # updating bars info
+                bars = td_info.stats(market, exchange_abbr, '1h', 50000, 10)    # updating bars info
                 
             # Check if we need to cancel 
             stop_bback = check_bb_flag()
@@ -507,7 +547,7 @@ def buy_back(price_base):
                 flag_reb_c = False 
             
             # Checking time elapsed from the start of buyback 
-            time_elapsed = (math.ceil(time_now - time_bb_initiated ))/60    
+            time_elapsed = (math.ceil(time.time() - time_bb_initiated ))/60    
             
             # Getting the current price 
             price_upd = get_last_price(market)
@@ -538,7 +578,7 @@ def buy_back(price_base):
                     if price_upd > bars['td_up_2_close'].iloc[-1]*target_prop: 
                         # Additionally (verified on BTC): last 2H should not be red 
                         lprint(["Getting 2H TD"])
-                        bars2h = td_info.stats(market, '2h', 50000, 5)    # updating bars info
+                        bars2h = td_info.stats(market, exchange_abbr, '2h', 50000, 5)    # updating bars info
                         # Just in case checking 2H data availability. If there are NaNs, we should not be using it 
                         num_null = bars2h['open'].isnull().sum()
                         if num_null > 0: 
@@ -558,7 +598,8 @@ def buy_back(price_base):
             # There is no need to collect prices every 30 seconds for this if we are based on 1-h time indicators
             if flag_reb_c: 
                 time.sleep(300) # sleeping for 5 minutes
-            
+    '''    
+    
     # Finishing up 
     return bback_result   
     
@@ -662,7 +703,33 @@ def sell_orders_outcome():
             
         except: 
             lprint(['Trade history xls unavailable']) 
-            
+
+########################################
+#### Setting stop loss based on price data #####
+#######################################
+def stop_reconfigure(mode = None): 
+    global db, cur, job_id
+    global time_hour
+    global market, exchange_abbr
+    global price_entry
+    
+    sl_target_upd = None 
+    sl_upd = None 
+    sl_p_upd = None  
+   
+    time_hour_update = time.strftime("%H")
+    if (time_hour_update <> time_hour) or mode == 'now': 
+        # Updating the current hour and the TD values 
+        time_hour = time_hour_update
+        bars_4h = td_info.stats(market, exchange_abbr, '4h', 50000, 5)     
+        if bars_4h['td_direction'].iloc[-1] == 'up': 
+            sl_target_upd = bars_4h['low'].iloc[-1] * 0.995  # low of 4H candle minus 0.5% (empirical for btc) 
+            sl_upd = round(sl_target_upd/price_entry , 5) 
+            sl_p_upd = (1.0 - sl_upd)*100.0 
+            lprint(["New stop loss level:", sl_target_upd])
+        else:   # just in case 
+            lprint(["No bullish 4H candle to update the stop loss"])  
+    return sl_target_upd, sl_upd, sl_p_upd
             
 ##################################
 #### Mooning trajectory procedure #####
@@ -670,11 +737,12 @@ def sell_orders_outcome():
 
 def to_the_moon(price_reached):     
     # Global variables used 
-    global main_curr_from_sell, value_original, price_curr, commission_total, sl, price_target, t_m_id, approved_flag, offset_check, comission_rate
+    global main_curr_from_sell, value_original, price_curr, commission_total, price_target, t_m_id, approved_flag, offset_check, comission_rate
     global sleep_timer
     global db, cur, job_id
     global stopped_price
     global trailing_stop_flag, start_time, bars, strategy, diff_threshold
+    global sl, sl_target, sl_p 
 
     # Thresholds for post-profit fallback for BTC or ALTS
     if market == 'USDT-BTC': 
@@ -687,12 +755,22 @@ def to_the_moon(price_reached):
     # To sell on original TP
     price_cutoff = price_reached * post_sl_level ## sl  
     # To sell on new high * stop loss threshold
-    trailing_stop = price_max * post_sl_level # *sl
+    # trailing_stop = price_max * post_sl_level    # changed to follow the 4H rule 
+    trailing_stop = sl_target
+    
     lprint(["Mooning from:", price_max])   
     rocket_flag = True
     
     # Running the loop 
     while rocket_flag:  
+        # Update to set stops according to 4H candles and TD 
+        if td_data_available: 
+            sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure()
+            if sl_target_upd is not None: 
+                trailing_stop = sl_target_upd
+                sl = sl_upd
+                sl_p = sl_p_upd    
+    
         price_last_moon = get_last_price(market)
         increase_info = 100*float(price_last_moon - price_target)/float(price_target) 
         lprint(["Price update:", price_last_moon, "higher than original target on", round(increase_info, 2), "%"])
@@ -704,13 +782,23 @@ def to_the_moon(price_reached):
         if price_last_moon > price_max: 
             # Setting higher thresholds
             price_max = price_last_moon
-            trailing_stop = price_max * post_sl_level  # sl*1.01    # Changed to the fix (empirical)
+            # trailing_stop = price_max * post_sl_level       # removed as we are updating in 4H candles 
             lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
 
         ### Checking if this is a time to sell now  ###
         ### starting only when trailing_stop_flag is active (should not be doing this for BTC runs) 
         # print ">> Price last moon (to compare)", price_last_moon, "maximum price", price_max, "price_cutoff", price_cutoff, "trailing_stop", trailing_stop  # DEBUG # 
+        
         if trailing_stop_flag: 
+        
+            # Simplified this back to basics as we are using the 4H rule and selling if we are falling behind the bullish candle 
+            if (price_last_moon <= price_cutoff) or (price_last_moon <= trailing_stop): 
+                lprint(["Run out of fuel @", price_last_moon])
+                # Check if we need to sell
+                sale_trigger = ensure_sale(price_last_moon)   
+                lprint(["Sale trigger (post-profit)", sale_trigger])
+            
+            ''' # Previous version code 
             # Using a 'classical method' if there is no TD data 
             if td_data_available != True: 
                 if (price_last_moon <= price_cutoff) or (price_last_moon <= trailing_stop): 
@@ -727,7 +815,7 @@ def to_the_moon(price_reached):
                 if time_diff > 10:  # updating every 10 minutes 
                     lprint(["Preparing to update TD info"])
                     start_time = time_now
-                    bars = td_info.stats(market, '30min', 50000, 10)    # updating bars info
+                    bars = td_info.stats(market, exchange_abbr, '30min', 50000, 10)    # updating bars info
                     
                 # Checking if we should sell on trailing stop. For BTC, valid if we are on setup down and current price is less than 1's high on more than 2.55%
                 # % depends on the strategy (diff_threshold) 
@@ -742,7 +830,7 @@ def to_the_moon(price_reached):
                 else: # if there is no td_down_1_high meaning we are going up according to the TD indicator             
                     lprint(["TD setup direction is up, 30h setup number", bars['td_setup'].iloc[-1] ])
                     sale_trigger = False 
-            
+            '''
             # It is a good idea to sell at +45% when something is pumping 
             if increase_info > 45:
                 sale_trigger = True 
@@ -759,10 +847,9 @@ def to_the_moon(price_reached):
                 if price_last_moon > price_cutoff: 
                     stopped_price = trailing_stop 
                 else: 
-                    stopped_price = price_cutoff
-        ####            
+                    stopped_price = price_cutoff       
                             
-        # Check if selling now request has been initiated
+        # Check if 'sell now' request has been initiated
         sell_init_flag = check_sell_flag()
         if sell_init_flag == True:       
             lprint(["Sale initiated via Telegram @", price_last])
@@ -803,12 +890,12 @@ def to_the_moon(price_reached):
 def ensure_sale(check_price): 
        
     proceed_sale = False  
-    price_arr = np.zeros(3) #3x5-min candlesticks
+    price_arr = np.zeros(3) #3xN-min candlesticks  (see candle_extreme for N) 
     lprint(["Running ensure_sale check"])
     
     # Filling the prices array - will be checking for lower highs 
-    # this while actually solves the issue of unavailability too
-    while (0 in price_arr): #(proceed_sale == False): 
+    # this actually solves the issue of unavailability too
+    while (0 in price_arr):  
         # Checking Telegram requests and answering 
         approved_flag = check_cancel_flag()
         if approved_flag == False: 
@@ -818,7 +905,7 @@ def ensure_sale(check_price):
         price_arr = np.append(price_arr, price_highest)
         price_arr = np.delete(price_arr, [0])
         
-        # Selling on the series of lower or same highs of 3 x 5-min candlesticks when the price array is filled      
+        # Selling on the series of lower or same highs of 3 x N-min candlesticks when the price array is filled      
         if (0 not in price_arr): 
             lprint(["High in the candle:", price_highest, "| lower or same highs:", equal_or_decreasing(price_arr)])  #lprint([price_arr]) # DEBUG
             if equal_or_decreasing(price_arr): 
@@ -1116,14 +1203,18 @@ else:
 if limit_sell_amount > 0: 
     lprint(["Maximum quantity to sell", limit_sell_amount])
 
-''' ######## Removed this - will not really be using SL (at least for now)
+'''
+######## Removed this - will not really be using SL (at least for now)
 # Check if TP is set higher than SL 
 if tp < sl: 
     # print "TP {}, SL {}".format(tp, sl) # DEBUG #
     lprint(["Take profit lower than stop loss, r u ok?"])
     exit(0)
-'''
-    
+''' 
+
+# For periodic updates of 4H candles and stops 
+time_hour = time.strftime("%H") 
+  
 # Checking market correctness and URL validity, as well as protecting from fat fingers
 try: 
     ticker_upd = getticker(exchange, market) 
@@ -1177,8 +1268,8 @@ job_id, rows = query_lastrow_id(sql_string)
 start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 try: 
-    # should be 30 min for trailing stop and 1h for buyback. checking larger interval here fof NaNs
-    bars = td_info.stats(market, '1h', 10000, 10)    
+    # should be 1h for buyback. checking larger interval here fof NaNs  #REVISE
+    bars = td_info.stats(market, exchange_abbr, '1h', 10000, 10)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -1194,12 +1285,21 @@ except:
     
 print "TD data availability:", td_data_available
 
+''' # Older version
 # Updating because we need 30 minutes intervals for stops 
 if td_data_available: 
     print "Please wait while updating the TD data"
-    bars = td_info.stats(market, '30min', 10000, 10) 
-    
-#############################################################
+    bars = td_info.stats(market, exchange_abbr, '30min', 10000, 10) 
+''' 
+# 4H update    
+if td_data_available: 
+    lprint(["Reconfiguring stop loss level based on 4H candles"])
+    sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure('now')
+    if sl_target_upd is not None: 
+        sl_target = sl_target_upd
+        sl = sl_upd
+        sl_p = sl_p_upd    
+ 
 
 # Strategy and thresholds 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
@@ -1211,7 +1311,7 @@ elif currency == 'BTC':
 else: 
     strategy = 'alt-volatile' 
     diff_threshold = 0.055
-print "Price action strategy:", strategy
+# print "Price action strategy:", strategy # Not relevant in this version 
 
 # Creating new set to store previously executed orders 
 # Will be used to calculate the gainz 
@@ -1231,10 +1331,18 @@ flag_notify_m = True
 flag_notify_h = True
 dropped_flag = False
     
-# Start the main cycle
+##############################  Start the main cycle
 while run_flag and approved_flag:  
-    # To raise keyboard cancellation exceptions
+    # try / except is here to raise keyboard cancellation exceptions
     try:
+        # Update the stop loss level if due and if we have pri
+        if td_data_available: 
+            sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure()
+            if sl_target_upd is not None: 
+                sl_target = sl_target_upd
+                sl = sl_upd
+                sl_p = sl_p_upd    
+            
         # Get the last price
         price_last = get_last_price(market)
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
@@ -1295,7 +1403,7 @@ while run_flag and approved_flag:
             # For buybacks 
             stopped_price = price_last
         
-        # Checking cancellation request
+        # Checking cancellation request and sleeping 
         if run_flag and approved_flag:
             approved_flag = check_cancel_flag()
             if approved_flag == False: 
@@ -1303,7 +1411,8 @@ while run_flag and approved_flag:
                 sleep_timer = 0
             time.sleep(sleep_timer)
             
-        # (New) If price dropped and back to entry 
+        # If price dropped and back to entry, not really using this 
+        '''
         if (dropped_flag) and (price_last >= price_entry) and (stop_loss != True): 
             dropped_flag = False
             lprint(["Price back to entry point"])
@@ -1318,6 +1427,7 @@ while run_flag and approved_flag:
             lprint(["Price has dropped on more than 10% from the entry"])
             send_notification('Price drop', market + ' warning: price has dropped on more than 10% from the entry')
             flag_notify_h = False 
+        ''' 
             
     except KeyboardInterrupt:
         lprint(["Shutdown was initiated manually, canceling orders and terminating now"])   
@@ -1420,7 +1530,7 @@ try:
         tp_price = bb_price * tp
         sl_price = bb_price * (1 - diff_threshold)  # depending on the strategy 
         
-        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange)
+        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
         wf_id, rows = query_lastrow_id(sql_string)       
 
         if wf_id is not None: 
@@ -1435,11 +1545,11 @@ try:
             mode_buy = 'reg' 
         
         if platform_run == 'Windows': 
-            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange, trade, currency, str(buy_trade_price)])    #, str(bb_price), '5']) 
+            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange_abbr, trade, currency, str(buy_trade_price)])    #, str(bb_price), '5']) 
             # cmd_init_buy is 'start cmd /K python robot.py '
         else: 
             # Nix
-            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange, trade, currency, str(buy_trade_price)]) + '"'    #, str(bb_price), '5']) + '"'
+            cmd_str = cmd_init_buy + ' '.join([mode_buy, exchange_abbr, trade, currency, str(buy_trade_price)]) + '"'    #, str(bb_price), '5']) + '"'
             # cmd_init_buy is 'gnome-terminal --tab --profile Active -e "python /home/illi4/Robot/robot.py'   # we will also need to add params and close with "   
         os.system(cmd_str)
     # If buyback cancellation was requested 
