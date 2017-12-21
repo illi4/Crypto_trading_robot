@@ -166,7 +166,7 @@ time.sleep(30)
 # New logger
 logger = logfile(market, 'buy')    
 
-### Lprint function ####
+### Lprint function #############################################################
 def lprint(arr):
     msg = ' '.join(map(lambda x: ''+ str(x), arr))
     logger.write(msg)

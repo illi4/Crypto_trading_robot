@@ -1302,15 +1302,7 @@ if td_data_available:
     print "Please wait while updating the TD data"
     bars = td_info.stats(market, exchange_abbr, '30min', 10000, 10) 
 ''' 
-# 4H update    
-if td_data_available: 
-    lprint(["Reconfiguring stop loss level based on 4H candles"])
-    sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure('now')
-    if sl_target_upd is not None: 
-        sl_target = sl_target_upd
-        sl = sl_upd
-        sl_p = sl_p_upd    
- 
+
 # Strategy and thresholds 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
     strategy = 'alt-med'
@@ -1322,6 +1314,15 @@ else:
     strategy = 'alt-volatile' 
     diff_threshold = 0.055
 # print "Price action strategy:", strategy # Not relevant in this version 
+
+# 4H update    
+if td_data_available: 
+    lprint(["Reconfiguring stop loss level based on 4H candles"])
+    sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure('now')
+    if sl_target_upd is not None: 
+        sl_target = sl_target_upd
+        sl = sl_upd
+        sl_p = sl_p_upd    
 
 # Creating new set to store previously executed orders 
 # Will be used to calculate the gainz 
