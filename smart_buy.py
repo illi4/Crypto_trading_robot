@@ -149,10 +149,17 @@ try:
         time_restriction = float(argv[7])
     except:
         time_restriction = 0
+
 except:
     print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina (bittrex, binance)'
     exit(0)
 
+# Thresholds for buys on 4H 
+if currency == 'BTC': 
+    diff_threshold = 0.005  # 0.5% 
+else: 
+    diff_threshold = 0.01   # 1% 
+    
 # Sleeping for a bit so that information on workflows is updated in the database just in case 
 time.sleep(30)
 
@@ -604,7 +611,7 @@ while buy_flag and approved_flag:
                     time_hour = time_hour_update
                     bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)     
                 lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "Current price:", price_curr ])       
-                if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > bars['high'].iloc[-1]):  
+                if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > (bars['high'].iloc[-1] * (1 + diff_threshold))):  
                     fixed_price_starter = True 
             
         # If meeting conditions for fixed price - get the current   

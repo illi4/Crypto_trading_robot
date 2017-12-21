@@ -318,7 +318,7 @@ def candle_extreme(type):
     price_extreme = 0
     failed_attempts = 0
     
-    for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
+    for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec); 80 x 3 for 4 minutes 
         try:
             #ticker_upd = api.getticker(market)
             ticker_upd = getticker(exchange, market) 
@@ -427,6 +427,11 @@ def buy_back(price_base):
     global bb_id, market, exchange_abbr
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     
+    if strategy == 'btc': 
+        diff_threshold = 0.005 # 0.5%
+    else: 
+        diff_threshold = 0.01 # 1%
+    
     flag_reb_c = True 
     td_first_run = True 
     bback_result = False 
@@ -516,8 +521,8 @@ def buy_back(price_base):
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
                 rows = query(sql_string)
             
-            # Checking if we should buy back: this happens when the price is above a bullish setup 
-            if (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > bars['close'].iloc[-1]):  
+            # Checking if we should buy back: this happens when the price is above a bullish setup candle 
+            if (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > (bars['high'].iloc[-1])*(1 + diff_threshold)):  
                 bback_result = True 
                 flag_reb_c = False 
                 lprint(["TD buyback initiated"])
@@ -710,20 +715,26 @@ def sell_orders_outcome():
 def stop_reconfigure(mode = None): 
     global db, cur, job_id
     global time_hour
-    global market, exchange_abbr
+    global market, exchange_abbr, strategy 
     global price_entry
     
     sl_target_upd = None 
     sl_upd = None 
     sl_p_upd = None  
    
+    # Stop level depending on the strategy 
+    if strategy == 'btc': 
+        down_contingency = 0.005
+    else: 
+        down_contingency = 0.01
+    
     time_hour_update = time.strftime("%H")
     if (time_hour_update <> time_hour) or mode == 'now': 
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
         bars_4h = td_info.stats(market, exchange_abbr, '4h', 50000, 5)     
         if bars_4h['td_direction'].iloc[-1] == 'up': 
-            sl_target_upd = bars_4h['low'].iloc[-1] * 0.995  # low of 4H candle minus 0.5% (empirical for btc) 
+            sl_target_upd = bars_4h['low'].iloc[-1] * (1 - down_contingency)  # low of 4H candle minus 0.5% (empirical for btc) 
             sl_upd = round(sl_target_upd/price_entry , 5) 
             sl_p_upd = (1.0 - sl_upd)*100.0 
             lprint(["New stop loss level:", sl_target_upd])
@@ -1300,7 +1311,6 @@ if td_data_available:
         sl = sl_upd
         sl_p = sl_p_upd    
  
-
 # Strategy and thresholds 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
     strategy = 'alt-med'
@@ -1342,11 +1352,14 @@ while run_flag and approved_flag:
                 sl_target = sl_target_upd
                 sl = sl_upd
                 sl_p = sl_p_upd    
+                # Updating the db 
+                sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target, sl_p, job_id)
+                rows = query(sql_string)
             
         # Get the last price
         price_last = get_last_price(market)
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
-        lprint([market, ": updating price information:", price_last, "|", price_compared, "% of entry price"])
+        lprint([market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target ])
         
         # Updating the db 
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={} WHERE job_id={}".format(round(price_last, 8), price_compared, job_id)
@@ -1460,7 +1473,8 @@ sell_orders_info()
 sell_orders_outcome()
 
 # Then start monitoring for buyback (both post-moon and SL)  'pre-profit'  /  'post-profit'
-
+''' 
+# Commented the whole section for now 
 # Checking losses to stop buyback in case of 2 consecutive losses incurred #HERE#
 sql_string = "SELECT id FROM losses WHERE market = '{}'".format(market)
 rows = query(sql_string)
@@ -1469,7 +1483,8 @@ try:
     # print "Selecting an existing loss" 
 except: 
     loss_id = None
-
+''' 
+    
 if (stopped_mode == 'pre-profit') and (cancel_buyback == False): 
     # Using value of price_exit (actual sell price) minus 0.25%
     bb_price = price_exit * 0.9975
@@ -1477,6 +1492,8 @@ if (stopped_mode == 'pre-profit') and (cancel_buyback == False):
     # Checking losses to stop buyback in case of 2 consecutive losses incurred #HERE#
     #sql_string = "SELECT id FROM losses WHERE market = '{}'".format(market)
     #rows = query(sql_string)
+    '''
+    # Commented the whole section for now 
     if loss_id is not None: 
         chat.send(market +": stopped buyback after two consecutive losses")
         sql_string = "DELETE FROM losses WHERE id = {}".format(loss_id)
@@ -1487,6 +1504,7 @@ if (stopped_mode == 'pre-profit') and (cancel_buyback == False):
         # Inserting into losses table if this is the first occurence 
         sql_string = "INSERT INTO losses(market) VALUES ('{}')".format(market)
         rows = query(sql_string)    
+    ''' 
 elif stopped_mode == 'post-profit': 
     
     # Thresholds for post-profit fallback for BTC or ALTS
@@ -1496,10 +1514,13 @@ elif stopped_mode == 'post-profit':
         bb_price = price_exit  * 1.01 # stopped_price * 1.01 # Using fixed value of +1% from stop; however, does not refer to price value when using TD analysis 
     
     lprint(["Setting buyback price as actual +1%. Stopped_price:", stopped_price, "bb_price", bb_price])
+    ''' 
+    # Commented the whole section for now 
     # If it was a loser - delete the info in DB and continue with BBack 
     if loss_id is not None: 
         sql_string = "DELETE FROM losses WHERE id = {}".format(loss_id)
         rows = query(sql_string)
+    ''' 
 else: 
     # If just called for stop from Telegram - closing logs properly and exiting
     logger.close_and_exit()
