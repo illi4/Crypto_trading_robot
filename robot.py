@@ -549,7 +549,7 @@ def sell_orders_info():
         commission_total = 0        
         alt_sold_total = 0 
         
-        # Getting information on sell orders executed
+        # Getting information on _sell_ orders executed
         orders_opening_upd = getorderhistory(exchange, market) 
         for elem in orders_opening_upd: 
             orders_new.add(elem['OrderUuid'])
@@ -1401,7 +1401,11 @@ else:
 ### 12. Buying back based on 4H action or alternative price action.   
 try: 
     lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
-    buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate) # commission depending on the exchange. If we do not have TD data
+    
+    if exchange == 'bitmex': 
+        buy_trade_price = main_curr_from_sell
+    else: 
+        buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate) # commission depending on the exchange. If we do not have TD data
     
     # Inserting into buyback information table 
     sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
@@ -1423,7 +1427,7 @@ try:
 
         if wf_id is not None: 
             buy_market = '{0}-{1}'.format(trade, currency)
-            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange, wf_id) 
+            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange_abbr, wf_id) 
             job_id, rows = query_lastrow_id(sql_string)
             
         # Buy depending on the platform. We will buy @ market price now, and the price entry price is already in the DB
@@ -1456,5 +1460,8 @@ except KeyboardInterrupt:
     print "Buyback cancelled or the task was finished"  
     sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
     rows = query(sql_string)
-    logger.close_and_exit()
+    try: 
+        logger.close_and_exit()
+    except: 
+        print 'Logs already closed' 
 

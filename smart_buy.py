@@ -208,11 +208,13 @@ print "TD data availability:", td_data_available
 ### Check if this is a part of workflow (meaning that a job should be then launched)   
 sql_string = "SELECT wf_id, run_mode FROM workflow WHERE market = '{}' AND exchange = '{}'".format(market, exchange_abbr)
 rows = query(sql_string)
+
 try: 
     wf_id = rows[0][0]   # first result if existing 
     wf_run_mode = rows[0][1] 
     lprint(["Workflow:", wf_id, wf_run_mode])
 except:
+    lprint(["Not a part of workflow"])
     wf_id = None
     wf_run_mode = None
 
@@ -511,7 +513,6 @@ while buy_flag and approved_flag:
             
             price_unit = order_info['PricePerUnit']
             price_order = order_info['Price']
-            print "Filled", quantity_filled
             
             if price_unit is None: 
                 price_unit = 0
