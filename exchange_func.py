@@ -1,6 +1,6 @@
 ################################ Libraries ############################################
 
-from sqltools import query_lastrow_id, query  # proper requests to sqlite db
+from sqltools import query_lastrow_id, query  # proper requests to sqlite db, custom library
 
 ## Standard libraries 
 import time
@@ -11,7 +11,7 @@ import math
 import decimal
 from decimal import Decimal, getcontext
 
-# CCTX and client libraries
+# CCTX and other exchange client libraries
 import ccxt   
 from exchanges.bittrex.client import bittrex # bittrex module with api and success flag check by default
 
@@ -172,11 +172,11 @@ def bitmex_closepositions(positions, market, price):
         result = bitmex_selllimit(market, None, price, contracts_total)
     return result    
 
-def bitmex_getorderhistory(market):  #We only need IDs 
+def bitmex_get_sell_ordhist(market):  # only need sell (short) orders (IDs) 
     market = market_std(market)    
     listoforders = [] 
     bitmex_orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {})
-    for order in bitmex_orders: 
+    for order in bitmex_orders:  
         temp_dict = {}
         temp_dict['OrderUuid'] = order["orderID"]
         listoforders.append(temp_dict)
@@ -257,15 +257,16 @@ def binance_get_balance(currency):
             output['Available'] = float(value['free'])       
     return output
 
-def binance_get_trades(market):
+def binance_get_sell_ordhist(market):     # only need sell orders (IDs) 
     market = market_std(market)    
     trades = binance.fetchMyTrades(symbol = market, since = None, limit = None, params = {})
-    
     listoftrades = []
     for trade in trades: 
         temp_dict = {}
-        temp_dict['OrderUuid'] = trade['info']['orderId']
-        listoftrades.append(temp_dict)
+        if trade['side'] == 'sell': 
+            print trade, '\n\n'
+            temp_dict['OrderUuid'] = trade['info']['orderId']
+            listoftrades.append(temp_dict)
     return listoftrades    
     
 def binance_openorders(market): # returns my open orders 
@@ -370,7 +371,17 @@ def binance_selllimit(market, sell_q_step, price_to_sell):
         return msg 
     else: 
        return return_result
-      
+
+### Bittrex some modifications 
+def bittrex_get_sell_ordhist(market):   
+    orders_return = []
+    orders_all = api_bittrex.getorderhistory(market, 100)
+    for order in orders_all: 
+        if order['OrderType'] == 'LIMIT_SELL': 
+            orders_return.append(order)
+    return orders_return 
+       
+       
 ############################################################################ 
 ############# Common functions for all exchanges ##################################    
 ############# For robot to work, all the data should be in the same format ################
@@ -406,13 +417,13 @@ def cancel(exchange, market, orderid):
     else:
         return 0
 
-def getorderhistory(exchange, market):
+def getorderhistory(exchange, market):  # getting orders history; this is only used to get sell orders (in robot.py) 
     if exchange == 'bittrex':
-        return api_bittrex.getorderhistory(market, 500)
+        return bittrex_get_sell_ordhist(market)
     elif exchange == 'binance':
-        return binance_get_trades(market) 
+        return binance_get_sell_ordhist(market) 
     elif exchange == 'bitmex':
-        return bitmex_getorderhistory(market) 
+        return bitmex_get_sell_ordhist(market) 
     else:
         return 0
 
