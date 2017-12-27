@@ -408,7 +408,7 @@ def cancel(exchange, market, orderid):
 
 def getorderhistory(exchange, market):
     if exchange == 'bittrex':
-        return api_bittrex.getorderhistory(market, 100)
+        return api_bittrex.getorderhistory(market, 500)
     elif exchange == 'binance':
         return binance_get_trades(market) 
     elif exchange == 'bitmex':

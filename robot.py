@@ -194,6 +194,7 @@ commission_total = 0
 alt_sold_total = 0  
 decrease_attempts_total = 0  
 value_original = 0
+contracts_start = 0 
 stopped_mode = '' 
 
 # Logger
@@ -304,7 +305,7 @@ def get_last_price(market):
 ##################### Extreme in time series; returns value with the lowest or the highest ticker price among N-min intervals (candles) 
 # type should be 'H' or 'L' (highest ore lowest in the series) 
 def candle_extreme(type): 
-    global market, candle_steps, candle_sleep
+    global exchange, market, candle_steps, candle_sleep
     ticker_upd = {}
     price_upd = 0
     price_extreme = 0
@@ -537,6 +538,7 @@ def cancel_orders(market):
 ##################### Update information on performed orders
 def sell_orders_info():
     global simulation, main_curr_from_sell, commission_total, alt_sold_total, orders_start, no_sell_orders, market, limit_sell_amount
+    global exchange 
     
     # Updating order history to collect information on new orders (disable in the simulation mode)
     # Further speed improvement would be to change the structure to a proper dict here right away    
