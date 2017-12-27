@@ -73,19 +73,19 @@ I would recommend setting up a virtual machine or using a cloud VM so that poppi
 
 ### Some examples of how to use all this 
 
-** Example 1**: You are keen to run a task in simulation mode to see how the robot works. The assumption is that you bought 30 LTC on bittrex for your BTC thinking that selling it later would be a profitable trade. Your price was 0.017, take profit target is 0.02, and stop loss level is 0.015. You only want to test it for the quantity of 20 LTC. You will then have the following lovely chat with the configured Telegram bot: 
+**Example 1**: You are keen to run a task in simulation mode to see how the robot works. The assumption is that you bought 30 LTC on bittrex for your BTC thinking that selling it later would be a profitable trade. Your price was 0.017, take profit target is 0.02, and stop loss level is 0.015. You only want to test it for the quantity of 20 LTC. You will then have the following lovely chat with the configured Telegram bot: 
 
 ![chat_example_1](images/chat_example_1.png?raw=true "Chat_1")
 
 The task will be launched in simulation (even for buybacks). 
 
-** Example 2**: Still careful with actually using this tool, you decide to test buying functionality. Let's say that you are collecting price data through price_logger and that you would like to buy based on 4-hour price action method. You are keen to buy BTC for 5500 USDT on binance for a market price on 4-hour confirmation. Then your chat would be: 
+**Example 2**: Still careful with actually using this tool, you decide to test buying functionality. Let's say that you are collecting price data through price_logger and that you would like to buy based on 4-hour price action method. You are keen to buy BTC for 5500 USDT on binance for a market price on 4-hour confirmation. Then your chat would be: 
 
 ![chat_example_2](images/chat_example_2.png?raw=true "Chat_2")
 
 Similarly, the task will be launched in simulation. 
 
-** Example 3**: Now you see that this stuff works fine and would like to configure something more advanced. For instance, you see that BTC/USDT is looking really bullish and you would like to buy on the breakout at the level of 19650. You consider that your initial take profit target is 20000, you would like to put a tight initial stop loss at 19500, and you are going to spend 5500 USDT. Easy!
+**Example 3**: Now you see that this stuff works fine and would like to configure something more advanced. For instance, you see that BTC/USDT is looking really bullish and you would like to buy on the breakout at the level of 19650. You consider that your initial take profit target is 20000, you would like to put a tight initial stop loss at 19500, and you are going to spend 5500 USDT. Easy!
 
 ![chat_example_3](images/chat_example_3.png?raw=true "Chat_2")
 
