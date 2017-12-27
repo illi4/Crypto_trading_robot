@@ -1,11 +1,9 @@
-## Standard libraries 
+################################ Libraries ############################################
 import json
 import urllib2
-
 import decimal
 from decimal import Decimal
 import math 
-
 import time
 from time import localtime, strftime
 import pandas as pd 
@@ -16,39 +14,50 @@ import sys
 from sys import exit, argv
 import os
 
-## Custom libraries 
 # Universal functions for all the exchanges 
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances  
 from telegramlib import telegram # my lib to work with Telegram   
 import platformlib as platform  # detecting the OS and assigning proper folders 
 from coinigylib import coinigy
 
-coinigy = coinigy()
-chat = telegram()
-    
+################################ Functions ############################################
 def append_line(data, filename):    
     with open(filename, 'ab') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(data)    
-    
-# List of cryptos to monitor   
-markets_dict = {
-'USDT-USD': 'KRKN', 
-'USDT-BTC' : 'BTRX', 
-'USDT-BTC' : 'BINA', 
-'BTC-LTC' : 'BTRX', 
-'BTC-DASH' : 'BTRX', 
-'BTC-MUSIC' : 'BTRX', 
-'BTC-XMR' : 'BTRX', 
-'BTC-NEO' : 'BTRX', 
-'BTC-ETH' : 'BTRX', 
-'BTC-POWR' : 'BTRX',
-'BTC-CTR' : 'BINA', 
-'BTC-MUSIC' : 'BTRX', 
-'XBT-USD' : 'BMEX'   
-}
 
-usdt_exchanges_list = ['btrx', 'bnc']   # exchanges list 
+################################ Config ############################################
+coinigy = coinigy()
+chat = telegram()
+ 
+platform = platform.platformlib()
+platform_run, cmd_init, cmd_init_buy = platform.initialise()     
+        
+# Directories to copy (if needed - I am using this for backing up data) 
+dir_from = '/home/illi4/Robot/price_log'
+dir_to = '/home/illi4/Dropbox/Exchange/price_log'
+
+# List of cryptos   
+markets_list = [
+    ['USDT-USD', 'KRKN'], 
+    ['USDT-BTC', 'BTRX'], 
+    ['USDT-BTC' , 'BINA'], 
+    ['BTC-LTC' , 'BTRX'], 
+    ['BTC-DASH' , 'BTRX'], 
+    ['BTC-MUSIC' , 'BTRX'], 
+    ['BTC-XMR' , 'BTRX'], 
+    ['BTC-NEO' , 'BTRX'], 
+    ['BTC-ETH' , 'BTRX'], 
+    ['BTC-POWR' , 'BTRX'],
+    ['BTC-CTR' , 'BINA'], 
+    ['BTC-MUSIC' , 'BTRX'], 
+    ['XBT-USD' , 'BMEX'], 
+    ['USD-BTC' , 'BITS']       
+]
+
+################################ Code ############################################
+
+usdt_exchanges_list = ['btrx', 'bina']   # exchanges list 
 
 markets = []
 usdt_arr_min = []   # min for minute
@@ -56,44 +65,59 @@ file_dict = {}
 failed_attempts_dict = {}   # failed attempts 
 time_failed = {} 
 
-for elem, exch_use in markets_dict.iteritems():
-    filename = 'price_log/' + elem + '_' + exch_use.lower() + '.csv'
-    file_dict[elem] = filename  
-    failed_attempts_dict[elem] = 0 
-
+for elem in markets_list:
+    # There is an exception for bitmex and their naming  
+    if elem[0] == 'XBT-USD' and elem[1] == 'BMEX': 
+        name_id = 'USD-BTC_bmex'
+        filename = 'price_log/' + name_id + '.csv'
+        file_dict['XBT-USD_bmex'] = filename  
+    else:     
+        name_id = elem[0] + '_' + elem[1].lower()
+        filename = 'price_log/' + name_id + '.csv'
+        file_dict[name_id] = filename  
+    failed_attempts_dict[elem[0]] = 0 
+ 
 usdt_count = 0 
 usdt_price_arr = np.ones(15) #15 1-min values 
 usdt_collapse = False 
 
 # Failed timer milestone 
-for elem, exch_use in markets_dict.iteritems(): 
-    time_failed[elem] =  time.time()
-    # print "Orig time milestone", time_failed[elem] 
+for elem in markets_list: 
+    time_failed[elem[0]] =  time.time()    
 
-while True: # Logging the prices and checking what is up with USDT 
-    
+# For directories copying (remove if you do not need this)  
+start_time_dir_copy = time.time()
+
+# Logging the prices and checking what is up with USDT 
+while True: 
     # Timers on the start
     start_time = time.time()
     
-    # Updating crypto prices 
-    for elem, exch_use in markets_dict.iteritems(): 
+    # Copy files to dropbox if needed (price data) every hour 
+    if (start_time - start_time_dir_copy) > 3600: 
+        start_time_dir_copy = start_time
+        os.system('cp -R ' + dir_from + ' ' + dir_to)
     
-        elem_ticker = elem.replace('-', '/') 
+    # Updating crypto prices 
+    for elem in markets_list: 
+        name_id = elem[0] + '_' + elem[1].lower()
+        elem_ticker = elem[0].replace('-', '/') 
         try: 
-            price = coinigy.price(elem_ticker, exch_use)
+            price = coinigy.price(elem_ticker, elem[1])
         except: 
             price = None 
         timestamp = time.time()
         date_time = datetime.fromtimestamp(timestamp)
+        print date_time, ':', elem[0], elem[1], price 
         
         if price is not None: 
-            print date_time, ':', elem, price 
             # Appending to the file 
-            if elem <> 'USDT-USD': 
-                append_line([timestamp, price], file_dict[elem])
+            if elem[0] <> 'USDT-USD': 
+                append_line([timestamp, price], file_dict[name_id])
+                #print "Folder:", file_dict[name_id]
 
             # Specifically for USDT 
-            if elem == 'USDT-USD': 
+            if elem[0] == 'USDT-USD': 
                 usdt_arr_min.append(float(price))
                 usdt_count += 1    
                 if usdt_count > 2:  # total 1 min
@@ -107,7 +131,7 @@ while True: # Logging the prices and checking what is up with USDT
                     print '> USDT price array', usdt_price_arr
                 
                 # Checking for a collapse of USDT 
-                if (usdt_price_arr.min() < 0.93) and (usdt_collapse == False): 
+                if (usdt_price_arr.min() < 0.93) and (usdt_collapse == False):  
                     chat.send("Alarm: USDT-USD price has been below 0.93 for more than 15 minutes")
                     usdt_collapse = True 
 
@@ -118,7 +142,7 @@ while True: # Logging the prices and checking what is up with USDT
                         if usdt_exch_abbr == 'btrx': 
                             exchange_usdt = 'bittrex'
                             comission_rate = 0.003
-                        elif usdt_exch_abbr == 'bnc': 
+                        elif usdt_exch_abbr == 'bina': 
                             exchange_usdt = 'binance'
                             comission_rate = 0.001
                         
@@ -136,17 +160,17 @@ while True: # Logging the prices and checking what is up with USDT
         # If there are issues with getting the price 
         else: 
             # Notification about errors and logging to see what's up 
-            print date_time, ':', elem, 'failed to get the price' 
-            failed_attempts_dict[elem] += 1
+            print date_time, ':', elem[0], 'failed to get the price' 
+            failed_attempts_dict[elem[0]] += 1
             # Logging issues 
-            append_line([date_time, elem, exch_use], 'price_log_issues.csv')
+            append_line([date_time, elem[0], elem[1]], 'price_log_issues.csv')
                
-            if failed_attempts_dict[elem] >= 5: 
-                time_failed_diff = time_failed[elem] - time.time()
+            if failed_attempts_dict[elem[0]] >= 5: 
+                time_failed_diff = time_failed[elem[0]] - time.time()
                 if time_failed_diff < 600:        
-                    chat.send("Cannot get the price of " + elem + " for 10 minutes and 5 times in a row")
-                    failed_attempts_dict[elem] = 0 
-                    time_failed[elem] = time.time()
+                    chat.send("Cannot get the price of " + elem[0] + " for 10 minutes and 5 times in a row")
+                    failed_attempts_dict[elem[0]] = 0 
+                    time_failed[elem[0]] = time.time()
     # Timer 
     time_now = time.time() 
     time_diff = (math.ceil(time_now - start_time)) 

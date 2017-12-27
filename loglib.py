@@ -31,3 +31,7 @@ class logfile(object):
         self.logger.removeHandler(self.handler)
         del self.logger, self.handler
         exit(0)
+
+    def close(self):
+        self.logger.removeHandler(self.handler)
+        del self.logger, self.handler

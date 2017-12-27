@@ -1,4 +1,19 @@
-## Standard libraries 
+##################################################################################################################
+# Use: python smart_buy.py mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] 
+# Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 
+# This tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices
+#
+# Modes:
+#   4h - buy based on 4h candles price action 
+#   reg - buy at fixed price 
+#   brk - buy on breakout (above the specified price) 
+# hint: options above with -s mean the same but they run in the simulation mode
+#   now is to buy immediately 
+#
+# Exchanges: btrx, bina, bmex (bittrex, binance, bitmex) 
+
+################################ Libraries ############################################
+# Standard libraries 
 import time
 import sys
 from sys import exit, argv
@@ -19,48 +34,43 @@ import numpy as np
 import traceback
 
 ## Custom libraries 
-from telegramlib import telegram # my lib to work with Telegram
-from sqltools import query_lastrow_id, query # proper requests to sqlite db
+from telegramlib import telegram                              # my lib to work with Telegram
+from sqltools import query_lastrow_id, query           # proper requests to sqlite db
 from loglib import logfile # logging
-import platformlib as platform  # detecting the OS and assigning proper folders 
-# Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances 
+import platformlib as platform                                    # detecting the OS and assigning proper folders 
 
-# TD analysis library
+# Universal functions for all exchanges 
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions
+
+################################ Config - part I ############################################
+
+### TD analysis library
 import tdlib as tdlib
 td_info = tdlib.tdlib()
 
-# Decimal precision and roubding 
+### Decimal precision and roubding 
 decimal.getcontext().prec = 25
 decimal.getcontext().rounding = 'ROUND_DOWN'
 
 print "Running..."
 
-# >> call: smart_buy.py BTC QTUM 0.007 (price_requested)
-
-############################## Parameters - p. 1 ##########################################################
-
-# Interval and number of checks to get current (last) prices 
+### Interval and number of checks to get current (last) prices 
 steps_ticker = 3 
 sleep_ticker = 10 # So that ticker in total takes 30 seconds 
 
-# Sleep timer in seconds for buy task. changed to 3 minutes because orders were filling way too quickly at a higher price
+### Sleep timer in seconds for buy task. changed to 3 minutes because orders were filling way too quickly at a higher price
 sleep_timer = 180  #180 is 3 min  
 
-# Breakout confirmation - how much should the price be higher from the breakout point (e.g. 5% higher than the line) 
-# breakout_perc = 1.05 # Not used anymore
+### Orders sequence for a market price calculation 
+orders_check = 5 
 
-# Orders sequence for market price 
-orders_check = 5 # start with 7, then 5, then 3, then 2, then 1 
-
-# Steps and timer for buybacks 
+### Steps and timer for buybacks 
 candle_steps = 100
 candle_sleep = 2.8 # Tested, 3 sec lead to having ~5 min 30 sec in between  
 
-# Speedrun mode 
-speedrun = 1 #1
+### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
+speedrun = 1
 
-# sleep_confirm_buy = int(sleep_confirm_buy/speedrun)
 sleep_timer = int(sleep_timer/speedrun)
 sleep_ticker = int(sleep_ticker/speedrun)
 candle_steps = int(candle_steps/speedrun)
@@ -70,20 +80,21 @@ send_messages = True
 comm_method = 'chat'
 chat = telegram()
 
-# Platform
+### Platform
 platform = platform.platformlib()
 platform_run, cmd_init, cmd_init_buy = platform.initialise() 
 
+# New logger
+logger = logfile(market, 'buy')    
 
-########### For price comparison 
+################################ Functions - part I ############################################
 
+##################### Price comparison 
 def strictly_increasing(L):
     return all(x<y for x, y in zip(L, L[1:]))
 
 def strictly_decreasing(L):
     return all(x>y for x, y in zip(L, L[1:]))
-
-###
    
 def terminate_w_message(short_text, errtext):
     global logger, handler    
@@ -111,32 +122,41 @@ def send_notification(subj, text):
         else: 
             chat.send(text)
 
+##################### Log and print function 
+def lprint(arr):
+    msg = ' '.join(map(lambda x: ''+ str(x), arr))
+    logger.write(msg)
+    print msg
             
-################## INPUT PARAMETERS ####################################
+################################ Config - part II ############################################
+### Input parameters 
 try: 
-    # Modes: reg / brk (regular / buy on breakout) 
+    # Modes 
     mode = argv[1].lower()
-    if mode not in ['reg', 'brk', 'now', 'reg-s', 'brk-s', '4h']: 
+    if mode not in ['reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s']: 
         print 'Incorrect mode specified (should be reg, brk, now, reg-s, brk-s, 4h)\n\n'
         send_notification('Incorrect mode', 'Incorrect mode specified')
         exit(0)
         
     # Exchange 
     exchange_abbr = argv[2].lower()
-    if exchange_abbr not in ['btrx', 'bina']: 
-        print 'Incorrect exchange specified (should be btrx or bina)\n\n'
+    if exchange_abbr not in ['btrx', 'bina', 'bmex']: 
+        print 'Incorrect exchange specified (should be btrx, bina, or bitmex)\n\n'
         send_notification('Incorrect exchange', 'Incorrect exchange specified')
         exit(0)
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
     elif exchange_abbr == 'bina': 
         exchange = 'binance' 
+    elif exchange_abbr == 'bmex': 
+        exchange = 'bitmex' 
         
     # Main currency (e.g. BTC) 
     trade = argv[3].upper()
     currency = argv[4].upper()
     source_position = float(argv[5])
     market = '{0}-{1}'.format(trade, currency)
+    
     # If the price is set up
     try: 
         fixed_price = float(argv[6])
@@ -144,6 +164,7 @@ try:
     except:
         fixed_price = 0
         fixed_price_flag = False
+        
     # Time restriction for fixed price orders in minutes
     try: 
         time_restriction = float(argv[7])
@@ -151,31 +172,22 @@ try:
         time_restriction = 0
 
 except:
-    print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina (bittrex, binance)'
+    print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
     exit(0)
 
-# Thresholds for buys on 4H 
+### Thresholds for buys on 4H 
 if currency == 'BTC': 
     diff_threshold = 0.005  # 0.5% 
 else: 
     diff_threshold = 0.01   # 1% 
     
-# Sleeping for a bit so that information on workflows is updated in the database just in case 
-time.sleep(30)
-
-# New logger
-logger = logfile(market, 'buy')    
-
-### Lprint function #############################################################
-def lprint(arr):
-    msg = ' '.join(map(lambda x: ''+ str(x), arr))
-    logger.write(msg)
-    print msg
-
-#### Price data analysis 
+### Price data analysis 
 time_hour = time.strftime("%H") 
-
 td_data_available = True  # default which will be changed to False when needed  
+
+# Sleeping for a bit so that information on workflows is updated in the database just in case 
+time.sleep(int(30/speedrun))
+
 try: 
     bars = td_info.stats(market, exchange_abbr, '4h', 50000, 10)    
     try: 
@@ -190,11 +202,10 @@ try:
             td_data_available = False 
 except: 
     td_data_available = False 
-    
+ 
 print "TD data availability:", td_data_available
 
-    
-########### Check if this is a part of workflow ######################################
+### Check if this is a part of workflow (meaning that a job should be then launched)   
 sql_string = "SELECT wf_id, run_mode FROM workflow WHERE market = '{}' AND exchange = '{}'".format(market, exchange_abbr)
 rows = query(sql_string)
 try: 
@@ -205,15 +216,13 @@ except:
     wf_id = None
     wf_run_mode = None
 
-#############################################################################
-
+################################ Functions - part II ############################################
+##################### Check if cancellation was requested through Telegram 
 def check_cancel_flag():
     global db, cur, job_id
-    
     keep_running = True 
     sql_string = "SELECT abort_flag FROM buys WHERE job_id = '{}'".format(job_id)
     rows = query(sql_string)
-
     try: 
         flag_terminate = rows[0][0] # first result 
     except: 
@@ -222,30 +231,28 @@ def check_cancel_flag():
         keep_running = False
     return keep_running
 
-
-####  Getting several last prices in short intervals instead of just one 
+##################### Getting several last prices in short intervals instead of just one 
 def get_last_price(market): 
     ticker_upd = {}
     price_upd = 0
     failed_attempts = 0
     for i in range(1, steps_ticker + 1):
         try:
-            # ticker_upd = api.getticker(market)
             ticker_upd = getticker(exchange, market) 
             price_upd += ticker_upd
-            # print "Price averaging", i, ticker  
         except:
             #print "Issues with URL (!) for market", market
             failed_attempts += 1
         time.sleep(sleep_ticker)
+        
     # Logging failed attempts number
     if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])    
+        lprint(["Failed attempts to receive price:", failed_attempts])   
+        
     # If retreiving prices fails completely
     if failed_attempts == steps_ticker:     
         ticker_upd = None # Change
         # Could be related to maintenance
-        # Commented - not needed here # if ticker_upd is None: 
         try:
             send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         except: 
@@ -261,12 +268,10 @@ def get_last_price(market):
     else: 
         # Get the average price 
         price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
-    # print "Price final", price_upd  
+        
     return price_upd
 
-
-
-############# Extreme in time series 
+##################### Extreme in time series 
 # Returns value with the lowest or the highest ticker price among 5-min intervals (candles) 
 # type should be 'H' or 'L' (highest ore lowest in the series) 
 def candle_extreme(type): 
@@ -289,7 +294,8 @@ def candle_extreme(type):
         except:
             #print "Issues with URL (!) for market", market
             failed_attempts += 1
-        time.sleep(candle_sleep) # 
+        time.sleep(candle_sleep) 
+        
     # Logging failed attempts number
     if failed_attempts > 0: 
         lprint(["Failed attempts to receive price:", failed_attempts])    
@@ -312,7 +318,7 @@ def candle_extreme(type):
             price_extreme = price_upd
     return price_extreme
 
-# Ensuring buy  
+##################### Ensuring buy  
 def ensure_buy(): 
     global mode 
 
@@ -321,7 +327,7 @@ def ensure_buy():
         lprint(["Proceeding with immediate buy as requested"])
     else: 
         proceed_buy = False  
-        price_arr = np.zeros(3) #3x5-min candlesticks
+        price_arr = np.zeros(3)     #3*N-min candlesticks
         lprint(["Running ensure_buy check"])
         
         # Filling the prices array - will be checking for strictly higher lows 
@@ -338,29 +344,28 @@ def ensure_buy():
 
             # Selling on the series of strictly higher lows
             if (0 not in price_arr): 
-                lprint(["Low in the candle:", price_lowest, "| higher lows:", strictly_increasing(price_arr)])  #lprint([price_arr]) # DEBUG
+                lprint(["Low in the candle:", price_lowest, "| higher lows:", strictly_increasing(price_arr)])   
                 if strictly_increasing(price_arr): 
                     proceed_buy = True
             else: 
-                lprint(["Low in the candle:", price_lowest])  #lprint([price_arr]) # DEBUG
+                lprint(["Low in the candle:", price_lowest])   
 
     return proceed_buy     
 
 
-#### Checking balance and changing the position size
+##################### Checking balance and changing the position size
 def ensure_balance(): 
     global wf_id, job_id, wf_run_mode 
     global approved_flag  
-    global source_position
+    global source_position, price_curr
 
     if wf_run_mode == 's' or wf_run_mode == 'sns':
         return True 
     else: 
-        #balance = api.getbalance(trade)
         print "Checking balance", exchange, trade
         balance = getbalance(exchange, trade)
         balance_avail = balance['Available']
-
+               
         if balance_avail < source_position: 
             balance_stopper = True  
             lprint(['Insufficient balance to buy. Requested:', source_position, 'available:', balance_avail])  
@@ -368,13 +373,15 @@ def ensure_balance():
             send_notification('Balance', str_reply)
         else: 
             balance_stopper = False 
-            
+ 
+        
         # If we need to switch for commission
-        # For some reason does not work fine for bittrex 
         if exchange == 'bittrex': 
             comission_rate = 0.003     
         elif exchange == 'binance': 
-            comission_rate = 0.001   
+            comission_rate = 0.001 
+        elif exchange == 'bitmex': 
+            comission_rate = 0
         
         if (balance_avail >= source_position) and (balance_avail*(1 - comission_rate) < source_position): 
             source_position = balance_avail*(1 - comission_rate)
@@ -396,11 +403,12 @@ def ensure_balance():
             if approved_flag == False: 
                 return 
         
-  
-######################################################################   
-#                                       Checking availability etc.
-#######################################################################
 
+
+###################################################################################
+############################## Main workflow #########################################
+###################################################################################
+### 1. Checking availability, balance 
 try: 
     ticker_upd = getticker(exchange, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
@@ -419,8 +427,6 @@ try:
         # Fat fingers protection if a specific price is requested
         price_check = ticker_upd
         ratio = float(fixed_price)/float(price_check)
-
-        # Just in case 
         if (ratio >= 1) and (mode == 'reg'): 
             err_msg = 'Error: the requested price is higher than the current. The current price is ' + str(price_check)
             send_notification('Error', err_msg)
@@ -433,17 +439,9 @@ except urllib2.URLError:
     logger.close_and_exit()
 
 
-####################################################################
-############################# Main cycle #############################
-###################################################################
-
-### Start timer for price switching
+### 2. Start timer for price switching and handling simulation modes 
 timer_start = time.time()
 
-# DEBUG 
-print fixed_price_flag, fixed_price  
-
-# Handling simulation modes 
 if mode == 'reg-s': 
     wf_run_mode = 's' # simulating
     mode = 'reg' # setting up a regular mode 
@@ -453,30 +451,28 @@ if mode == 'brk-s':
 if mode == '4h-s': 
     wf_run_mode = 's' # simulating
     mode = '4h' # setting up a regular mode 
-    
+  
 # Breakout confirmation price 
-# price_info = fixed_price
 if mode == 'brk': 
-    breakout_target = fixed_price # fixed_price * breakout_perc # turned out to be quite inconvenient. as a general rule just set ~ +5% from the target breakout line 
-    #price_info = breakout_target
+    breakout_target = fixed_price  
 
 # Reduce the number of checked orders if an immediate buy is requested     
 if mode == 'now': 
     orders_check = 3
 
-# Checking 4h 
+# Checking 4H data availability 
 if mode == '4h' and (td_data_available != True): 
     print "TD data is unavailable, not possible to start the task"
     logger.close_and_exit()
     
-### Inserting in the sqlite db if started fine ##
+### Inserting in the sqlite db if started fine  
 sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode, exchange) VALUES ('{}', 0, {}, {}, {}, '{}', '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode, exchange)
 job_id, rows = query_lastrow_id(sql_string)
 
-############  Default values 
+### 3. Default values and starting balances / contracts 
 source_position = Decimal(str(source_position))
 
-source_start = source_position   # does not work straightforward
+source_start = source_position  
 fixed_price_starter = False 
 float_price_starter = False 
 
@@ -488,25 +484,31 @@ approved_flag = True
 source_filled = 0
 issues_notify = True 
 
-# Main working cycle  
+### 4. Main buying loop  
 while buy_flag and approved_flag: 
-    buy_rate = 0
+    buy_rate = 0        # price 
     
-    # Commented try for testing purposes - not sure what the hell was happening 
     try:  
         # Checking existing orders
         if buy_uuid != None: 
-            # Get info and cancel 
+            ### 4.1. Get information on the existing orders and cancel them
             lprint(['>>> Cancelling:' , buy_uuid, exchange, market])    
-            cancel_stat = cancel(exchange, market, buy_uuid)
-            time.sleep(10) # wait for it to be cancelled  - 10 sec
-     
-            order_info = getorder(exchange, market, buy_uuid)
-            # print 'Order info:', order_info
-            buy_uuid = None 
             
-            # Calculate
+            # If we are on bitmex - first we need to get the order info and then to cancel 
+            if exchange == 'bitmex': 
+                order_info = getorder(exchange, market, buy_uuid)
+                cancel_stat = cancel(exchange, market, buy_uuid)
+                time.sleep(5) 
+            else: 
+                cancel_stat = cancel(exchange, market, buy_uuid)
+                time.sleep(10) # wait for it to be cancelled  - 10 sec
+                order_info = getorder(exchange, market, buy_uuid)
+            
+            ### 4.2. Filled / remaining 
+            buy_uuid = None             
             quantity_filled = order_info['Quantity'] - order_info['QuantityRemaining']
+            # print ">>>>> Quantity filled {}, order_info['Quantity'] {} , order_info['QuantityRemaining']".format(quantity_filled, order_info['Quantity'], order_info['QuantityRemaining']) #DEBUG 
+            
             price_unit = order_info['PricePerUnit']
             price_order = order_info['Price']
             print "Filled", quantity_filled
@@ -514,29 +516,33 @@ while buy_flag and approved_flag:
             if price_unit is None: 
                 price_unit = 0
             
-            source_filled = Decimal(str(price_unit * quantity_filled))
-            sum_paid += Decimal(str(source_filled))   # for averaging of price 
-            sum_quantity += quantity_filled  # for averaging of price 
-            
-            str_status = '{} filled {}, {} filled: {}'.format(currency, quantity_filled, trade, source_filled) 
+            if exchange == 'bitmex': 
+                source_filled = Decimal(str(quantity_filled/price_unit))
+                sum_paid += Decimal(str(source_filled))   # for price averaging   
+                sum_quantity += quantity_filled
+                str_status = 'Filled: {}'.format(source_filled) 
+            else: 
+                source_filled = Decimal(str(price_unit * quantity_filled))
+                sum_paid += Decimal(str(source_filled))   
+                sum_quantity += quantity_filled  
+                str_status = '{} filled {}, {} filled: {}'.format(currency, quantity_filled, trade, source_filled) 
             lprint([str_status])    
 
-        # Timer update
+        ### 4.3. Timer update
         timer_now = time.time()
         timer_diff = (timer_now - timer_start)/60 # in minutes
 
-        # If out of the period - switching to floating prices       
+        # If out of the requested time period - switching to floating prices       
         if (time_restriction > 0) and (timer_diff > time_restriction) and fixed_price_flag: 
             fixed_price_flag = False 
             orders_check = 5
             comm_string = "Fixed price order could not be filled for " + market + " within required timeframe. Switching to market prices now."
             lprint([comm_string])
             send_notification('Update', comm_string)
-            # Updating db 
-            sql_string = "UPDATE buys SET price_fixed = {} WHERE job_id = {}".format(int(fixed_price_flag), job_id)    
+            sql_string = "UPDATE buys SET price_fixed = {} WHERE job_id = {}".format(int(fixed_price_flag), job_id)     # updating the DB 
             rows = query(sql_string)
 
-        # Checking the cancellation flag
+        ### 4.4. Checking the cancellation flag
         approved_flag = check_cancel_flag()
         if approved_flag == False: 
             lprint(["Shutdown was requested via Telegram"])   
@@ -544,19 +550,19 @@ while buy_flag and approved_flag:
             time.sleep(5) # wait for it to be cancelled 
             sleep_timer = 0
         
-        # Updating how much of source position (e.g. BTC) do we have left and placing a buy order if required
+        ### 4.5. Updating how much of source position (e.g. BTC) do we have left and placing a buy order if required
         source_position = Decimal(str(source_position)) - Decimal(str(source_filled))
         
         if approved_flag: 
             if fixed_price != 0:
                 if (mode == 'reg') or (mode == 'now'):  
-                    lprint([market, ': buying for', source_position, trade, '@', fixed_price])    
+                    lprint([market, ': buying for', source_position, '@', fixed_price])    
                 else: 
-                    lprint([market, ': buying on breakout target', source_position, trade, '@', breakout_target])    
+                    lprint([market, ': buying on breakout target', source_position, '@', breakout_target])    
             else: 
-                lprint([market, ': buying for', source_position, trade, '@ market price'])    
+                lprint([market, ': buying for', source_position, '@ market price'])    
         
-        #### Get the current price value
+        ### 4.6. Get the current price value
         price_curr = get_last_price(market)
         if fixed_price_flag != True:      
             sql_string = "UPDATE buys SET price = {} WHERE job_id = {}".format(price_curr, job_id)    
@@ -609,10 +615,14 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the 4H candles price data'])    
                     time_hour = time_hour_update
-                    bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)     
-                lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "Current price:", price_curr ])       
-                if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > (bars['high'].iloc[-1] * (1 + diff_threshold))):  
+                    bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)   
+                check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
+                lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
+                lprint([  "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value])       
+                if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
                     fixed_price_starter = True 
+                else: 
+                    lprint(["Condition not met"])
             
         # If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
@@ -625,13 +635,12 @@ while buy_flag and approved_flag:
             float_price_starter = ensure_buy()   
             lprint(["Buy trigger", float_price_starter])
                               
-        # Checking how much is left to buy and setting the price
-        # REWORKED to proper Decimals 
-        #if (round(float(source_position), 4) > float(source_start)*0.01) and (approved_flag):       
-        ratio = Decimal(source_filled/source_position)
+        ### 4.7. Checking how much is left to buy and setting the price      
+        # print "Source filled:", source_filled, " source start:", source_start     #DEBUG 
+        ratio = Decimal(source_filled/source_start)
         ratio = ratio.quantize(Decimal('1.01'))
 
-        if (ratio > 0.01 or ratio == 0) and (approved_flag):           
+        if (ratio < 0.99 or ratio == 0) and (approved_flag):           
             lprint(['Ratio (0 is not started):', ratio])  # DEBUG FOR FUTURE
             # If we are using market price (smartbuy)
             if fixed_price_flag != True:      
@@ -640,7 +649,6 @@ while buy_flag and approved_flag:
                 if float_price_starter: 
                     lprint(['>> Number of orders used:', orders_check])  
                 for elem in orderbook[:orders_check]: 
-                    # print elem['Rate'] # DEBUG #
                     buy_rate += elem['Rate']
                 buy_rate = round(buy_rate/orders_check, 8)
             else: 
@@ -651,50 +659,68 @@ while buy_flag and approved_flag:
             sql_string = "UPDATE buys SET price = {} WHERE job_id = {}".format(buy_rate, job_id)    
             rows = query(sql_string)
                        
-            ###### Placing buy order when requirements are met
+            ### 4.8. Placing buy order when requirements are met
             if (fixed_price_flag and fixed_price_starter) or ((fixed_price_flag != True) and (float_price_starter)):                
                 str_status = 'Used rate: {}'.format(buy_rate)  
                 lprint([str_status])    
-                quantity = round(Decimal(source_position)/Decimal(str(buy_rate)), 4)
+                quantity = round(Decimal(str(source_position))/Decimal(str(buy_rate)), 4)
+                
+                if exchange == 'bitmex': # need to do this in contracts because the api returns contracts and not xbt filled           
+                    quantity = round(Decimal(str(source_position)), 4)
+                    bitmex_margin = 4.99 
+                    buy_rate = round(buy_rate, 0) 
+                    contracts = round(quantity * buy_rate * bitmex_margin)    
+                
                 str_status = 'Quantity to buy {}'.format(quantity)  
                 lprint([str_status])    
-                
-                # If in simulation mode
+                     
+                # Simulation mode
                 if wf_run_mode == 's' or wf_run_mode == 'sns' or wf_run_mode == 'reg-s' or wf_run_mode == 'brk-s':
                     buy_flag = False 
                     sleep_timer = 0 
                     lprint(['Bought in simulation'])  
                     sum_quantity = quantity
                     avg_price = buy_rate
-                # If real mode    
-                else:
-                    buy_result = buylimit(exchange, market, quantity, buy_rate)  
-                    print 'Quantity {} buy_rate {}'.format(quantity, buy_rate) #DEBUG
-                    print "Result", buy_result #DEBUG
                     
-                    try: 
-                        buy_uuid = buy_result['uuid']
-                        lprint(['>> Placed order', buy_uuid])    
-                    except: 
-                        # Issues with buying - notify only once and keep trying 
-                        # May happen wit successful result - commented for troubleshooting
-                        if issues_notify: 
-                            issues_notify = False 
-                            chat.send('Issues with buying on the ' + market + ' on the exchange ' + exchange + '. Result: ' + buy_result)      
-                        ''' 
+                # Real mode    
+                else:
+                    # Double-checking the quantity after we calculated the actual rate  
+                    if quantity > 0.0: 
+                        # Bitmex is a bit special 
+                        if exchange == 'bitmex':  
+                            print 'Contracts {} buy_rate {}'.format(contracts, buy_rate) #DEBUG    
+                            buy_result = buylimit(exchange, market, None, buy_rate, contracts)  
+                        else: 
+                            print 'Quantity {} buy_rate {}'.format(quantity, buy_rate) #DEBUG    
+                            buy_result = buylimit(exchange, market, quantity, buy_rate)  
+
+                        print "> Result", buy_result #DEBUG
+                        
+                        if buy_result == 'MIN_TRADE_REQUIREMENT_NOT_MET': 
+                            # If trade requirement were not met or an error occured       
+                            buy_flag = False 
+                            sleep_timer = 0 
+                            chat.send('Cancelling buying on ' + market + ' as minimum trade requirements were not met')
+                        else:   
+                            # If the requirements were met 
+                            try: 
+                                buy_uuid = buy_result['uuid']
+                                lprint(['>> Placed order', buy_uuid])    
+                            except: 
+                                # If something else is wrong    
+                                buy_flag = False 
+                                sleep_timer = 0 
+                                err_msg = traceback.format_exc()
+                                comm_string = '{} issue. Reason: {}'.format(market, err_msg)
+                                lprint([comm_string])    
+                                chat.send(comm_string) 
+                                # Also cancelling workflow until we figure out what's up 
+                                wf_id = None
+                    else: 
                         buy_flag = False 
-                        wf_id = None
-                        # Commented as this was notifying about issues when zero quantity was left 
-                        # chat.send('Issues with buying on the ' + market)
-                        ''' 
+                        sleep_timer = 0 
             
             # Number of orders to check 
-            ''' # Old approach 
-            if orders_check == 7: 
-                orders_check -= 2
-            elif (orders_check > 1) and (orders_check <= 5): 
-                orders_check -= 1
-            ''' 
             if orders_check > 1: 
                 orders_check -= 1 # 5,4,3,2,1
             
@@ -705,7 +731,6 @@ while buy_flag and approved_flag:
         
         time.sleep(sleep_timer)
 
- 
     except: 
         err_msg = traceback.format_exc()
         comm_string = '{} buy task stopped. {} {} spent. Reason: {}'.format(market, sum_paid, trade, err_msg)
@@ -728,27 +753,37 @@ while buy_flag and approved_flag:
         logger.close_and_exit()
  
 
-# Deleting the task from the db 
+### 5. Deleting the task from the db 
 sql_string = "DELETE FROM buys WHERE job_id = {}".format(job_id)
 rows = query(sql_string)
 
-#print "Afterbuy WF ID", wf_id
-#print "Sum_q", sum_quantity
-#print "Average price paid", round(sum_paid / sum_quantity, 8)
- 
+'''
+#DEBUG block  
+print ">>>>Afterbuy WF ID", wf_id
+print "Sum_q", sum_quantity
+print "Sum_paid", sum_paid
+print "Average price paid", round(sum_paid / sum_quantity, 8)
+''' 
+### 6. Calculating averages and updating the information / logging the results 
 if sum_quantity > 0: 
     if (wf_run_mode != 's') and (wf_run_mode != 'sns'):
-        avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)
+        if exchange == 'bitmex': 
+            avg_price = round(Decimal(sum_quantity) / Decimal(str(sum_paid)), 8)    # cause we are buying contracts there  
+        else: 
+            avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)
         lprint(['Average price paid:', avg_price])    
     else:
         # If simulation
         sum_paid = source_position
-
-    comm_string = "{}: buy orders completed at the total amount of {} and the average price {}.\nBought {} {}.".format(market, sum_paid, avg_price, sum_quantity, currency)
+    
+    if exchange == 'bitmex': 
+        comm_string = "{}: buy orders completed, opened a position for {} contracts.".format(market, sum_quantity)
+    else: 
+        comm_string = "{}: buy orders completed at the total amount of {} and the average price {}.\nBought {} {}.".format(market, sum_paid, avg_price, sum_quantity, currency)
     send_notification('Bought', comm_string)
     lprint([comm_string])    
     
-    # Updating workflow info
+    # Updating workflow info if we have a workflow 
     if wf_id is not None: 
         sql_string = "UPDATE workflow SET sum_q = '{}', avg_price = '{}' WHERE wf_id = {}".format(sum_quantity, avg_price, wf_id) 
         job_id, rows = query_lastrow_id(sql_string)
@@ -759,7 +794,10 @@ if sum_quantity > 0:
             date_time = strftime("%Y-%m-%d %H:%M", localtime())
             wb = load_workbook("Trade_history.xlsx")
             ws = wb['Entry_points']
-            new_line = [date_time, currency, avg_price, sum_quantity, sum_paid]
+            if exchange == 'bitmex': 
+                new_line = [date_time, 'XBT', avg_price, sum_quantity, sum_paid]
+            else: 
+                new_line = [date_time, currency, avg_price, sum_quantity, sum_paid]
             ws.append(new_line)
             max_row = ws.max_row
             # Apply a style 
@@ -769,6 +807,7 @@ if sum_quantity > 0:
             #
             wb.save("Trade_history.xlsx")
             ''' 
+            # Used locally 
             if platform_run != 'Windows': 
                 copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
             ''' 
@@ -784,13 +823,12 @@ else:
         rows = query(sql_string)
         wf_id = None
 
-# DEBUG 
-# print "Checking WF again", wf_id  
+# Closing logs properly but not exiting     
+logger.close()
         
-# If this is a workflow - launching a new task 
+### 7. If this is a workflow - launching a new task 
 if wf_id is not None: 
     sql_string = "SELECT * FROM workflow WHERE wf_id = '{}'".format(wf_id)
-    # print sql_string #DEBUG
     rows = query(sql_string)
 
     try: 
@@ -815,37 +853,22 @@ if wf_id is not None:
         rows = query(sql_string)
         
         print '>>> Start a profit task: {} {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
-        # Launching depending on the platform
-        if platform_run == 'Windows': 
-            cmd_str = cmd_init + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)])
-        else: 
-            # Nix
-            cmd_str = cmd_init + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) + '"'
-        os.system(cmd_str)
-        
-        # Check if launched fine  
-        time.sleep(65)
-        sql_string = "SELECT job_id FROM jobs WHERE market = '{}'".format(market)
-        ### To check because some weird stuff is going on 
-        #stat_msg = "Called the following SQL to check if launched: ", sql_string 
-        #lprint([stat_msg])
-        #lprint(['WP market, trade, and curr are:', wf_info_market, wf_info_trade, wf_info_curr])
-        ###
-        rows = query(sql_string)
 
-        try: 
-            ## To check because some weird stuff is going on 
-            launched_confirmation = rows[0][0]   # first result if existing 
-            # lprint(['Obtained launched confirmation:', stat_msg])
-            ###
-            chat.send('Launched a new bot from the workflow for ' + market)
-        except:
-            chat.send('The job from the workflow for ' + market + ' was not launched')
+        # Launch in the same window 
+        python_call = 'python robot.py ' + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) 
+        p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
+        while True:
+            out = p.stderr.read(1)
+            if out == '' and p.poll() != None:
+                break
+            if out != '':
+                sys.stdout.write(out)
+                sys.stdout.flush()
+                
     except:
-        chat.send('Could not launch sell task in the workflow for ' + market)
+        chat.send('Could not launch sell task in the workflow for ' + market + ' or the task finished with an error')
 
-# Closing logs properly    
-logger.close_and_exit()
+
 
 
 

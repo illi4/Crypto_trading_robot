@@ -338,112 +338,6 @@ while True:
         
         ########## Balances info
         elif msg_text.find('balance') >= 0: 
-            
-            ''' # Old code replaced by coinigy stuff 
-            # Response string 
-            str_balance = '' 
-            # Prepare 
-            balance_btc_val = 0 
-            balance_total_btc_val = 0
-            # Aud info 
-            try:
-                response = urllib2.urlopen('http://api.fixer.io/latest?base=USD&symbols=AUD') 
-                usd_aud = json.load(response)['rates']['AUD']   
-            except: 
-                usd_aud = 1.254
-            
-            # Getting info on USDT exchange rate 
-            usdte = getticker('bittrex', 'USDT-BTC')   
-            
-            # >> Get balances from binance 
-            balances = getbalances('binance')
-            exchange = 'binance'
-            str_balance += 'Binance: \n'  
-            try: 
-                for result in balances: 
-                    currency = result['Currency'] 
-                    balance_total = result['Balance'] 
-                    balance = result['Available'] 
-                    # print 'Binance', currency, balance_total, balance
-                    pending = balance_total - balance
-                    if pending == 0: 
-                        pending_str = '\n'
-                    else:
-                        pending_str = '[P: {}]\n'.format(round(pending, 3))        
-                    if (round(balance_total, 3) > 0): 
-                        if currency == 'USDT': 
-                            market_symbol = currency + '-BTC' 
-                            market_symbol_price = float(getticker(exchange, market_symbol))
-                            curr_btc_val = balance/market_symbol_price
-                            balance_total_btc_val += curr_btc_val
-                            str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)       
-                        elif currency == 'BTC': 
-                            balance_btc_val += balance
-                            balance_total_btc_val += balance_total
-                            str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)   
-                        else: 
-                            market_symbol = 'BTC-' + currency 
-                            market_symbol_price = float(getticker(exchange, market_symbol))   
-                            curr_btc_val = market_symbol_price*balance 
-                            balance_btc_val += curr_btc_val
-                            balance_total_btc_val += market_symbol_price*balance_total
-                            str_balance += '{}: {} (~{} BTC) {}'.format(currency, round(balance, 3), round(curr_btc_val, 3), pending_str)  
-            except: 
-                chat.send('Could not retreive balance information from binance') 
-            
-            # >> Getting the balances info from bittrex 
-            balances = getbalances('bittrex')
-            exchange = 'bittrex'
-            str_balance += '\nBittrex: \n'  
-            
-            # Sometimes results are not going through 
-            try: 
-                for result in balances: 
-                    currency = result['Currency'] 
-                    balance_total = result['Balance'] 
-                    balance = result['Available'] 
-                    pending = balance_total - balance
-                    if pending == 0: 
-                        pending_str = '\n'
-                    else:
-                        pending_str = '[P: {}]\n'.format(round(pending, 3))         
-                    
-                    if (currency != 'USDT') and (currency != 'BTC') and (round(balance_total, 3) > 0): 
-                        market_symbol = 'BTC-' + currency 
-                        # if a different exchange is used 
-                        market_symbol_price = getticker(exchange, market_symbol)   
-                        curr_btc_val = market_symbol_price*balance 
-                        balance_btc_val += curr_btc_val
-                        balance_total_btc_val += market_symbol_price*balance_total
-                        str_balance += '{}: {} (~{} BTC) {}'.format(currency, round(balance, 3), round(curr_btc_val, 3), pending_str)            
-                    elif (currency == 'BTC') and (round(balance_total, 3) > 0): 
-                        balance_btc_val += balance
-                        balance_total_btc_val += balance_total
-                        str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)   
-                    elif (currency == 'USDT') and (round(balance_total, 3) > 0):     
-                        exchange = 'bittrex'
-                        market_symbol = 'USDT-BTC'
-                        market_symbol_price = getticker(exchange, market_symbol)   
-                        balance_btc_val += balance/market_symbol_price
-                        balance_total_btc_val += balance_total/market_symbol_price
-                        str_balance += '{}: {} {}'.format(currency, round(balance, 3), pending_str)          
-                    
-                balance_usdt_val = balance_total_btc_val*usdte
-                balance_aud_val = round(usd_aud*balance_usdt_val, 1) 
-                str_balance += '\nValue in BTC: {}\nValue in AUD: ~{}'.format(round(balance_total_btc_val, 3), balance_aud_val) 
-            except: 
-                chat.send('Could not retreive balance information from bittrex') 
-            
-            # TEMP - to be replaced with coinigy.balances() as soon as coinigy fix their issue with binance
-            try: 
-                bitmex_result = coinigy.balances('BitMEX')
-                str_balance +=  '\n\n' + bitmex_result
-            except: 
-                str_balance += '\n\n BitMEX not responding'
-            
-            # Send the response
-            chat.send(str_balance) 
-            ''' 
             # May not work if there are too many requests 
             retry = True 
             while retry: 
@@ -630,9 +524,9 @@ while True:
                     chat.send('Incorrect run mode specified')
                 else:
                     wf_exchange = msg_text_split[1]
-                    if wf_exchange not in ['btrx', 'bina']: 
-                        print 'Incorrect exchange specified (should be btrx or bina)\n\n'
-                        chat.send('Incorrect exchange specified (should be btrx or bina)')
+                    if wf_exchange not in ['btrx', 'bina', 'bmex']: 
+                        print 'Incorrect exchange specified (should be btrx, bina, bmex)\n\n'
+                        chat.send('Incorrect exchange specified (should be btrx, bina, bmex)')
                     else: 
                         # if ok 
                         wf_tp = msg_text_split[2]

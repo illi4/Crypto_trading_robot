@@ -7,8 +7,8 @@ import time
 class coinigy(object):
     def __init__(self):
         self.public = ['price', 'balances']
-        self.key = 'key'
-        self.secret = 'secret'
+        self.key = 'key'    # put your key here 
+        self.secret = 'secret'  # put your secret key here 
         self.content = "application/json"
 
     def price(self, ticker, exchange): 
@@ -117,6 +117,7 @@ class coinigy(object):
             str_balance += '\n'  
         
         try:
+            # For conversion of balances to AUD 
             response = urllib2.urlopen('http://api.fixer.io/latest?base=USD&symbols=AUD') 
             usd_aud = json.load(response)['rates']['AUD']   
         except: 

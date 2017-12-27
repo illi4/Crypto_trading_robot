@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import json 
 import requests
 from time import sleep
@@ -6,28 +5,21 @@ from sqltools import query_lastrow_id, query # proper requests to sqlite db
 from time import localtime, strftime
 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, detect_exchange, getorderbook, buylimit, getbalances
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
 
 # Telegram functions 
-<<<<<<< HEAD
-TOKEN = "token"
-
+TOKEN = "YOUR_TOKEN"
 URL = "https://api.telegram.org/bot{}/".format(TOKEN)
 
 payload = ""
 headers = {
-    'x-api-key': "key",
-    'x-api-secret': "secret",
+    'x-api-key': "YOUR_KEY",
+    'x-api-secret': "YOUR_SECRET_KEY",
     'content-type': "application/json"
     }
-=======
-TOKEN = "your_token"
-URL = "https://api.telegram.org/bot{}/".format(TOKEN)
-chat_id = 1111111111111  # your chat id 
->>>>>>> origin/master
 
-# Telegram monitoring interval  
-telegram_check_sec = 1
+chat_id = 9999999999  # YOUR CHAT ID 
+telegram_check_sec = 1 # Telegram monitoring interval  
 
 class telegram(object):
     def __init__(self):
@@ -85,8 +77,8 @@ class telegram(object):
                 if filtered_requests != []:                  
                     index = len(filtered_requests) - 1
                     print filtered_requests[0]["message"]["text"].lower()
-                    #   Does not work when in a function #  if index > 0: 
-                    #    send_telegram('Only processing the last message')
+                    # Does not work when in a function #  if index > 0: 
+                    # send_telegram('Only processing the last message')
                     return True, offset_check, filtered_requests[0]["message"]["text"].lower()
                 else: 
                     return False, offset_check, ''
@@ -129,8 +121,8 @@ class telegram(object):
                             log_time_msg = strftime("%Y-%m-%d %H-%M-%S", localtime()) + ' : ' + log_msg + '\n'
                             logfile.write(log_time_msg)
 
-                        #   Does not work when in a function #  if index > 0: 
-                        #    send_telegram('Only processing the last message')
+                        # Does not work when in a function #  if index > 0: 
+                        # send_telegram('Only processing the last message')
                         
                         return filtered_requests[0]["message"]["text"].lower()
                 sleep(telegram_check_sec)

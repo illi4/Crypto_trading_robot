@@ -14,7 +14,8 @@ class tdlib(object):
     def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10):
         # example period = '5min' 
         filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'
-
+        #print "Checked filename", filename 
+        
         try: 
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
         except: 
@@ -23,7 +24,7 @@ class tdlib(object):
         transactions_all.index = transactions_all.index + pd.Timedelta('11:00:00')  # convert to Sydney time 
         transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records
         
-        bars = transactions.price.resample(period).ohlc()   
+        bars = transactions.price.resample(period, base = 7).ohlc()   
         
         # Initial conditions 
         bearish_flip = False 
@@ -152,7 +153,7 @@ class tdlib(object):
             # common for any direction     
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
         
-        # Return all except for the last one because we need info on the whole period not just the part                 
+        # Return all except for the last one because we need info on the whole period not just the part                
         return bars.tail(tail)[:-1]    
         
     
