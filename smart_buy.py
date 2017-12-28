@@ -778,9 +778,9 @@ if sum_quantity > 0:
         sum_paid = source_position
     
     if exchange == 'bitmex': 
-        comm_string = "{}: buy orders completed, opened a position for {} contracts.".format(market, sum_quantity)
+        comm_string = "{}: buy orders completed on {}, opened a position for {} contracts.".format(market, exchange, sum_quantity)
     else: 
-        comm_string = "{}: buy orders completed at the total amount of {} and the average price {}.\nBought {} {}.".format(market, sum_paid, avg_price, sum_quantity, currency)
+        comm_string = "{}: buy orders completed on {} at the total amount of {} and the average price {}.\nBought {} {}.".format(market, exchange, sum_paid, avg_price, sum_quantity, currency)
     send_notification('Bought', comm_string)
     lprint([comm_string])    
     
@@ -816,7 +816,7 @@ if sum_quantity > 0:
             lprint(['Trade history xls unavailable']) 
 
 else: 
-    send_notification('Cancelled', market + ': buy order was cancelled and nothing was bought')
+    send_notification('Cancelled', exchange + ':' + market + ': buy order was cancelled and nothing was bought')
     lprint([market, ': buy order was cancelled and nothing was bought'])    
     # Delete workflow for this market
     if wf_id is not None: 
@@ -867,7 +867,7 @@ if wf_id is not None:
                 sys.stdout.flush()
                 
     except:
-        chat.send('Could not launch sell task in the workflow for ' + market + ' or the task finished with an error')
+        chat.send('Could not launch sell task in the workflow for ' + market + ' on ' + exchange + ' or the task finished with an error')
 
 
 

@@ -737,7 +737,7 @@ def to_the_moon(price_reached):
             # Now checking sale trigger and selling if required         
             if sale_trigger == True:  
                 lprint(["Triggering trailing stop on", price_last])
-                send_notification('Sell: Post-TP', market + ': Triggering trailing stop on the level of ' + str(price_last))
+                send_notification('Sell: Post-TP', exchange + ':' + market + ': Triggering trailing stop on the level of ' + str(price_last))
                 status = sell_now(price_last_moon)
                 # Update the status
                 rocket_flag, stat_msg = process_stat(status)
@@ -1290,7 +1290,7 @@ while run_flag and approved_flag:
                 if sale_trigger == True:       
                     # Stop-loss triggered
                     lprint(["Triggering pre-profit stop loss on", price_last])
-                    send_notification('Sell: SL', market + ': Triggering pre-profit stop loss at the level of ' + str(price_last))
+                    send_notification('Sell: SL', exchange + ':' + market + ': Triggering pre-profit stop loss at the level of ' + str(price_last))
                     status = sell_now(price_last)
                     # Handling results
                     run_flag, stat_msg = process_stat(status)
@@ -1416,7 +1416,7 @@ try:
     
     # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
     if bb_flag: 
-        send_notification('Buyback', 'Buy back initiated for ' + market)  
+        send_notification('Buyback', 'Buy back initiated for ' + market + ' on ' + exchange)  
         
         # Launching workflow to buy and resume the task with same parameters
         # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
@@ -1454,7 +1454,7 @@ try:
     
     # If a buyback cancellation was requested 
     else: 
-        send_notification('Buyback', 'Buy back cancelled as requested for ' + market)  
+        send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange)  
     
 except KeyboardInterrupt:
     print "Buyback cancelled or the task was finished"  
