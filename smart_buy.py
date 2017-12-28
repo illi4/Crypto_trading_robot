@@ -619,7 +619,7 @@ while buy_flag and approved_flag:
                     bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)   
                 check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
                 lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
-                lprint([  "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value])       
+                lprint([  "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                 if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
                     fixed_price_starter = True 
                 else: 
