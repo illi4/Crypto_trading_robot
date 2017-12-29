@@ -1260,7 +1260,7 @@ while run_flag and approved_flag:
         # Get the last price
         price_last = get_last_price(market)
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
-        lprint([market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target ])
+        lprint([exchange, market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target ])
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={} WHERE job_id={}".format(round(price_last, 8), price_compared, job_id)
         rows = query(sql_string)
         
