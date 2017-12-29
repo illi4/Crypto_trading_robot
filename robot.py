@@ -743,7 +743,7 @@ def to_the_moon(price_reached):
             # Now checking sale trigger and selling if required         
             if sale_trigger == True:  
                 lprint(["Triggering trailing stop on", price_last])
-                send_notification('Sell: Post-TP', exchange + ':' + market + ': Triggering trailing stop on the level of ' + str(price_last))
+                send_notification('Sell: Post-TP', exchange + ' : ' + market + ': Triggering trailing stop on the level of ' + str(price_last))
                 status = sell_now(price_last_moon)
                 # Update the status
                 rocket_flag, stat_msg = process_stat(status)
@@ -1296,7 +1296,7 @@ while run_flag and approved_flag:
                 if sale_trigger == True:       
                     # Stop-loss triggered
                     lprint(["Triggering pre-profit stop loss on", price_last])
-                    send_notification('Sell: SL', exchange + ':' + market + ': Triggering pre-profit stop loss at the level of ' + str(price_last))
+                    send_notification('Sell: SL', exchange + ' : ' + market + ': Triggering pre-profit stop loss at the level of ' + str(price_last))
                     status = sell_now(price_last)
                     # Handling results
                     run_flag, stat_msg = process_stat(status)
