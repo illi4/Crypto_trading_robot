@@ -558,7 +558,7 @@ while buy_flag and approved_flag:
             if fixed_price != 0:
                 if (mode == 'reg') or (mode == 'now'):  
                     lprint([exchange, market, ': buying for', source_position, '@', fixed_price])    
-                else: 
+                elif mode == 'brk': 
                     lprint([exchange, market, ': buying on breakout target', source_position, '@', breakout_target])    
             else: 
                 lprint([exchange, market, ': buying for', source_position, '@ market price'])    
