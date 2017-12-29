@@ -506,7 +506,7 @@ def buy_back(price_base):
 
             # Getting the current price 
             price_upd = get_last_price(market)
-            lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "Time elapsed (min):", time_elapsed, "Current price:", price_upd ])        
+            lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1], "Time elapsed (min):", time_elapsed, "Current price:", price_upd ])        
 
             # Updating DB
             if bb_id is not None: 
@@ -542,43 +542,49 @@ def sell_orders_info():
     
     # Updating order history to collect information on new orders (disable in the simulation mode)
     # Further speed improvement would be to change the structure to a proper dict here right away    
-
-    if simulation != True: 
-        # Reset values if we are not simulating
-        main_curr_from_sell = 0     
-        commission_total = 0        
-        alt_sold_total = 0 
-        
-        # Getting information on _sell_ orders executed
-        orders_opening_upd = getorderhistory(exchange, market) 
-        for elem in orders_opening_upd: 
-            orders_new.add(elem['OrderUuid'])
-        orders_executed = orders_new.symmetric_difference(orders_start) 
- 
-        if orders_executed == set([]):
-            lprint(["No sell orders executed"])
-            no_sell_orders = True 
-        else:
-            lprint(["New executed orders"])  
+    
+    try: # to handle errors 
+        if simulation != True: 
+            # Reset values if we are not simulating
+            main_curr_from_sell = 0     
+            commission_total = 0        
+            alt_sold_total = 0 
             
-            for elem in orders_executed: 
-                order_info = getorder(exchange, market, elem)               
-                if exchange == 'bitmex':         
-                    if order_info['Status'] != 'Canceled': 
-                        main_curr_from_sell += order_info['simpleCumQty'] 
-                    commission_total += 0 
-                else: 
-                    main_curr_from_sell += order_info['Price']  
-                    commission_total += order_info['CommissionPaid']
-                qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
-                alt_sold_total += qty_sold
+            # Getting information on _sell_ orders executed
+            orders_opening_upd = getorderhistory(exchange, market) 
+            for elem in orders_opening_upd: 
+                orders_new.add(elem['OrderUuid'])
+            orders_executed = orders_new.symmetric_difference(orders_start) 
+     
+            if orders_executed == set([]):
+                lprint(["No sell orders executed"])
+                no_sell_orders = True 
+            else:
+                lprint(["New executed orders"])  
                 
-                lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
-            lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
-    else:
-        # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
-        alt_sold_total = limit_sell_amount
-            
+                for elem in orders_executed: 
+                    order_info = getorder(exchange, market, elem)               
+                    if exchange == 'bitmex':         
+                        if order_info['Status'] != 'Canceled': 
+                            main_curr_from_sell += order_info['simpleCumQty'] 
+                        commission_total += 0 
+                    else: 
+                        main_curr_from_sell += order_info['Price']  
+                        commission_total += order_info['CommissionPaid']
+                    qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
+                    alt_sold_total += qty_sold
+                    
+                    lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
+                lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
+        else:
+            # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
+            alt_sold_total = limit_sell_amount
+    except: 
+        err_msg = traceback.format_exc()
+        comm_string = 'Could not het sell orders history from {} on {}. Reason: {}. Check the results'.format(market, exchange, err_msg)
+        lprint([comm_string])    
+        chat.send(comm_string)  
+    
 ##################### Sell orders outcome 
 def sell_orders_outcome():
     global no_sell_orders, total_gained, main_curr_from_sell, value_original, commission_total, total_gained_perc, market

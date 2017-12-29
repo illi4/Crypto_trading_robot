@@ -69,7 +69,7 @@ candle_steps = 100
 candle_sleep = 2.8 # Tested, 3 sec lead to having ~5 min 30 sec in between  
 
 ### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun = 1
+speedrun = 1  
 
 sleep_timer = int(sleep_timer/speedrun)
 sleep_ticker = int(sleep_ticker/speedrun)
@@ -126,6 +126,7 @@ def lprint(arr):
     print msg
             
 ################################ Config - part II ############################################
+
 ### Input parameters 
 try: 
     # Modes 
@@ -143,17 +144,30 @@ try:
         exit(0)
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
+        comission_rate = 0.003      # rate is 0.25% + 0.05% for contingency in roundings etc 
     elif exchange_abbr == 'bina': 
         exchange = 'binance' 
+        comission_rate = 0.0015       # rate is 0.1% + 0.05% for contingency in roundings etc 
     elif exchange_abbr == 'bmex': 
         exchange = 'bitmex' 
-        
+        comission_rate = 0          # no commissions as such when opening a position 
+
     # Main currency (e.g. BTC) 
     trade = argv[3].upper()
     currency = argv[4].upper()
-    source_position = float(argv[5])
     market = '{0}-{1}'.format(trade, currency)
     
+    # New logger
+    logger = logfile(market, 'buy')    
+
+    # Getting for the whole if there is no input 
+    try: 
+        source_position = float(argv[5])
+    except: 
+        balance = getbalance(exchange, trade)
+        source_position = float(balance['Available'])
+        lprint(["Buying for the whole balance of", source_position])
+
     # If the price is set up
     try: 
         fixed_price = float(argv[6])
@@ -171,9 +185,6 @@ try:
 except:
     print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
     exit(0)
-
-# New logger
-logger = logfile(market, 'buy')    
     
 ### Thresholds for buys on 4H 
 if currency == 'BTC': 
@@ -360,6 +371,7 @@ def ensure_balance():
     global wf_id, job_id, wf_run_mode 
     global approved_flag  
     global source_position, price_curr
+    global comission_rate
 
     if wf_run_mode == 's' or wf_run_mode == 'sns':
         return True 
@@ -374,24 +386,10 @@ def ensure_balance():
             str_reply = '{}: insufficient balance to perform task. Please check. Requested: {}, available {}'.format(market, source_position, balance_avail)
             send_notification('Balance', str_reply)
         else: 
-            balance_stopper = False 
- 
+            balance_stopper = False
         
-        # If we need to switch for commission
-        if exchange == 'bittrex': 
-            comission_rate = 0.0035      # rate is 0.25% + 0.1% for contingency in roundings etc 
-        elif exchange == 'binance': 
-            comission_rate = 0.002       # rate is 0.1% + 0.1% for contingency in roundings etc 
-        elif exchange == 'bitmex': 
-            comission_rate = 0          # no commissions as such when opening a position 
-        
-        if (balance_avail >= source_position) and (balance_avail*(1 - comission_rate) < source_position): 
-            source_position = balance_avail*(1 - comission_rate)
-            lprint(['Changed source_position to handle commission to', source_position])  
-            
         while balance_stopper: 
             time.sleep(120) # sleeping for 2 minutes and checking again
-            #balance = api.getbalance(trade)
             balance = getbalance(exchange, trade)
             balance_avail = balance['Available']
 
@@ -404,8 +402,6 @@ def ensure_balance():
             approved_flag = check_cancel_flag()
             if approved_flag == False: 
                 return 
-        
-
 
 ###################################################################################
 ############################## Main workflow #########################################
@@ -552,7 +548,8 @@ while buy_flag and approved_flag:
             sleep_timer = 0
         
         ### 4.5. Updating how much of source position (e.g. BTC) do we have left and placing a buy order if required
-        source_position = Decimal(str(source_position)) - Decimal(str(source_filled))
+        source_position = ( Decimal(str(source_position)) - Decimal(str(source_filled))  ) * Decimal(str(1 - comission_rate)) 
+        lprint(["Updated source position considering commission:", source_position])   
         
         if approved_flag: 
             if fixed_price != 0:
@@ -664,14 +661,14 @@ while buy_flag and approved_flag:
             if (fixed_price_flag and fixed_price_starter) or ((fixed_price_flag != True) and (float_price_starter)):                
                 str_status = 'Used rate: {}'.format(buy_rate)  
                 lprint([str_status])    
-                quantity = round(Decimal(str(source_position))/Decimal(str(buy_rate)), 4)
-                
+                quantity = round(Decimal(str(source_position))/Decimal(str(buy_rate)), 6)                
+ 
                 if exchange == 'bitmex': # need to do this in contracts because the api returns contracts and not xbt filled           
-                    quantity = round(Decimal(str(source_position)), 4)
+                    quantity = round(Decimal(str(source_position)), 6)
                     bitmex_margin = 4.99 
                     buy_rate = round(buy_rate, 0) 
                     contracts = round(quantity * buy_rate * bitmex_margin)    
-                
+    
                 str_status = 'Quantity to buy {}'.format(quantity)  
                 lprint([str_status])    
                      
