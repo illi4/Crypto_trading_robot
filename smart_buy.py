@@ -379,11 +379,11 @@ def ensure_balance():
         
         # If we need to switch for commission
         if exchange == 'bittrex': 
-            comission_rate = 0.003     
+            comission_rate = 0.0035      # rate is 0.25% + 0.1% for contingency in roundings etc 
         elif exchange == 'binance': 
-            comission_rate = 0.001 
+            comission_rate = 0.002       # rate is 0.1% + 0.1% for contingency in roundings etc 
         elif exchange == 'bitmex': 
-            comission_rate = 0
+            comission_rate = 0          # no commissions as such when opening a position 
         
         if (balance_avail >= source_position) and (balance_avail*(1 - comission_rate) < source_position): 
             source_position = balance_avail*(1 - comission_rate)
@@ -557,11 +557,11 @@ while buy_flag and approved_flag:
         if approved_flag: 
             if fixed_price != 0:
                 if (mode == 'reg') or (mode == 'now'):  
-                    lprint([market, ': buying for', source_position, '@', fixed_price])    
+                    lprint([exchange, market, ': buying for', source_position, '@', fixed_price])    
                 else: 
-                    lprint([market, ': buying on breakout target', source_position, '@', breakout_target])    
+                    lprint([exchange, market, ': buying on breakout target', source_position, '@', breakout_target])    
             else: 
-                lprint([market, ': buying for', source_position, '@ market price'])    
+                lprint([exchange, market, ': buying for', source_position, '@ market price'])    
         
         ### 4.6. Get the current price value
         price_curr = get_last_price(market)
@@ -586,24 +586,24 @@ while buy_flag and approved_flag:
                     lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
                         fixed_price = get_last_price(market)
-                        lprint([market, ': target price', fixed_price, 'reached and confirmed, start placing buy orders'])    
+                        lprint([exchange, market, ': target price', fixed_price, 'reached and confirmed, start placing buy orders'])    
                     # Otherwise, we will continue in the next loop until we get confirmation on the reversal
                 else: 
-                    lprint([market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
+                    lprint([exchange, market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
                     
             ## If we are waiting for a breakout  - the logic is simple 
             if mode == 'brk':
                 if price_curr >= breakout_target:  
-                    lprint([market, ': breakout price', breakout_target, 'reached confirming.'])    
+                    lprint([exchange, market, ': breakout price', breakout_target, 'reached confirming.'])    
                     # Checking if we should buy or whether the price is jumping back
                     ensure_balance()
                     fixed_price_starter = ensure_buy()   
                     lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
                         fixed_price = get_last_price(market)
-                        lprint([market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
+                        lprint([exchange, market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
                 else: 
-                    lprint([market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
+                    lprint([exchange, market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
             
             ## If requested to buy now 
             if mode == 'now':
@@ -618,12 +618,12 @@ while buy_flag and approved_flag:
                     time_hour = time_hour_update
                     bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)   
                 check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
-                lprint([  "TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
-                lprint([  "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
+                lprint([ exchange, ": TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
+                lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                 if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
                     fixed_price_starter = True 
                 else: 
-                    lprint(["Condition not met"])
+                    lprint([ exchange,  ": Condition not met"])
             
         # If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
