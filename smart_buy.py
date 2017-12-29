@@ -371,7 +371,7 @@ def ensure_balance():
     global wf_id, job_id, wf_run_mode 
     global approved_flag  
     global source_position, price_curr
-    global comission_rate
+    global comission_rate, exchange
 
     if wf_run_mode == 's' or wf_run_mode == 'sns':
         return True 
@@ -379,30 +379,19 @@ def ensure_balance():
         print "Checking balance", exchange, trade
         balance = getbalance(exchange, trade)
         balance_avail = balance['Available']
-               
-        if balance_avail < source_position: 
-            balance_stopper = True  
-            lprint(['Insufficient balance to buy. Requested:', source_position, 'available:', balance_avail])  
-            str_reply = '{}: insufficient balance to perform task. Please check. Requested: {}, available {}'.format(market, source_position, balance_avail)
-            send_notification('Balance', str_reply)
-        else: 
-            balance_stopper = False
         
-        while balance_stopper: 
-            time.sleep(120) # sleeping for 2 minutes and checking again
-            balance = getbalance(exchange, trade)
-            balance_avail = balance['Available']
-
-            if balance_avail >= source_position: 
-                balance_stopper = False 
-                lprint(['Balance replenished and task resumed'])  
-                send_notification('Balance ok', 'Balance replenished, resuming buy task for ' + market)
-                
-            # Checking the cancellation flag
-            approved_flag = check_cancel_flag()
-            if approved_flag == False: 
-                return 
-
+        # Changing the available balance and changing the value if there is no enough funds       
+        if exchange == 'bitmex': 
+            return True 
+        else: 
+            if Decimal(str(balance_avail)) < Decimal(str(source_position)): 
+                source_position = Decimal(str(balance_avail)) * Decimal(str(1 - comission_rate)) 
+                lprint(['Corrected the position in ensure balance:', source_position ])    
+                return True 
+            else: 
+                return True 
+ 
+        
 ###################################################################################
 ############################## Main workflow #########################################
 ###################################################################################

@@ -47,7 +47,7 @@ def telegram_buy(wf_id = None):
     global platform_run, cmd_init_buy, chat
     print cmd_init_buy 
     
-    reply_string = 'Specify the parameters (e.g. "4h btrx usdt btc 7957") \nmode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n\n'\
+    reply_string = 'Specify the parameters (e.g. "4h btrx usdt btc 7957") \nmode exchange basic_curr altcoin [total_in_basic_curr] [price] [time limit for the price in minutes] \n\n'\
     '>>Example: reg btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes,'\
     'then switches to market prices \n\nModes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
     'options with -s mean simulation mode \n'\
@@ -67,7 +67,11 @@ def telegram_buy(wf_id = None):
         buy_exchange = msg_text_split[1].lower()
         buy_trade = msg_text_split[2].upper()
         buy_currency = msg_text_split[3].upper()
-        buy_total = msg_text_split[4]
+        
+        try: 
+            buy_total = msg_text_split[4]
+        except: 
+            buy_total = '' 
         
         try: 
             buy_price = msg_text_split[5]
