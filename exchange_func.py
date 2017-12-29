@@ -264,7 +264,6 @@ def binance_get_sell_ordhist(market):     # only need sell orders (IDs)
     for trade in trades: 
         temp_dict = {}
         if trade['side'] == 'sell': 
-            print trade, '\n\n'
             temp_dict['OrderUuid'] = trade['info']['orderId']
             listoftrades.append(temp_dict)
     return listoftrades    
