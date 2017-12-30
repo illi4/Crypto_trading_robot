@@ -385,7 +385,7 @@ def ensure_balance():
             return True 
         else: 
             if Decimal(str(balance_avail)) < Decimal(str(source_position)): 
-                source_position = Decimal(str(balance_avail)) * Decimal(str(1 - comission_rate)) 
+                source_position = Decimal(str(balance_avail))  
                 lprint(['Corrected the position in ensure balance:', source_position ])    
                 return True 
             else: 
@@ -458,6 +458,7 @@ job_id, rows = query_lastrow_id(sql_string)
 
 ### 3. Default values and starting balances / contracts 
 source_position = Decimal(str(source_position))
+ensure_balance() # added to modify the quantity on the start 
 
 source_start = source_position  
 fixed_price_starter = False 
@@ -567,7 +568,7 @@ while buy_flag and approved_flag:
                 # Removed 0.99 because we have ensure_sale and buying for the last price then
                 if price_curr <= fixed_price:   
                     # Checking if we should buy or whether it is too early
-                    ensure_balance()
+                    # ensure_balance()  # logic changed
                     fixed_price_starter = ensure_buy()    
                     lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
@@ -582,7 +583,7 @@ while buy_flag and approved_flag:
                 if price_curr >= breakout_target:  
                     lprint([exchange, market, ': breakout price', breakout_target, 'reached confirming.'])    
                     # Checking if we should buy or whether the price is jumping back
-                    ensure_balance()
+                    # ensure_balance()  # logic changed
                     fixed_price_starter = ensure_buy()   
                     lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
@@ -618,7 +619,7 @@ while buy_flag and approved_flag:
         ### Price conditions with floating price 
         if (fixed_price_flag != True) and (float_price_starter != True): 
             lprint(["Starting for the floating (market) price"])
-            ensure_balance()
+            # ensure_balance() # logic changed
             float_price_starter = ensure_buy()   
             lprint(["Buy trigger", float_price_starter])
                               
