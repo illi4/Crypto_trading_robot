@@ -639,6 +639,9 @@ def sell_orders_info():
         else:
             # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
             alt_sold_total = limit_sell_amount
+            if exchange == 'bitmex': 
+                price_exit = get_last_price(market)
+            main_curr_from_sell = contracts_start/price_exit   
     except: 
         err_msg = traceback.format_exc()
         comm_string = 'Could not het sell orders history from {} on {}. Reason: {}. Check the results'.format(market, exchange, err_msg)
@@ -1007,6 +1010,8 @@ def sell_now(at_price):
             value_original = Decimal(str(contracts_check['xbt']))
         else: # if we are in the simulation mode 
             contracts =  get_last_price(market) * simulation_balance
+            contracts_start = contracts
+            value_original = simulation_balance
     else: # for other exchanges     
         value_original = Decimal(str(price_entry)) * balance_start    
  
