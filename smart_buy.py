@@ -11,6 +11,8 @@
 #   now is to buy immediately 
 #
 # Exchanges: btrx, bina, bmex (bittrex, binance, bitmex) 
+#
+# For bitmex, negative values can be used. E.g. python smart_buy.py now bmex usd btc -0.3
 
 ################################ Libraries ############################################
 # Standard libraries 
@@ -69,7 +71,7 @@ candle_steps = 100
 candle_sleep = 2.8 # Tested, 3 sec lead to having ~5 min 30 sec in between  
 
 ### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun = 1  
+speedrun = 1 #1   
 
 sleep_timer = int(sleep_timer/speedrun)
 sleep_ticker = int(sleep_ticker/speedrun)
@@ -79,6 +81,13 @@ candle_steps = int(candle_steps/speedrun)
 send_messages = True 
 comm_method = 'chat'
 chat = telegram()
+
+### Default flag for shorting. The bot can be used to short on bitmex, not only go long 
+short_flag = False 
+bitmex_margin = 4.5    # size of margin on bitmex 
+
+# Time analysis candles length 
+td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable  
 
 ### Platform
 platform = platform.platformlib()
@@ -122,8 +131,11 @@ def send_notification(subj, text):
 ##################### Log and print function 
 def lprint(arr):
     msg = ' '.join(map(lambda x: ''+ str(x), arr))
-    logger.write(msg)
-    print msg
+    try: 
+        logger.write(msg)
+        print msg
+    except: 
+        print 'Failed to print output due to the IO error'
             
 ################################ Config - part II ############################################
 
@@ -163,11 +175,19 @@ try:
     # Getting for the whole if there is no input 
     try: 
         source_position = float(argv[5])
+        # For bitmex shorts 
+        if source_position < 0: 
+            short_flag = True 
+            source_position = abs(source_position)   
     except: 
         balance = getbalance(exchange, trade)
         source_position = float(balance['Available'])
         lprint(["Buying for the whole balance of", source_position])
-
+    
+    # Also change to properly reflect the margin     
+    if exchange == 'bitmex': 
+        source_position = source_position*bitmex_margin
+    
     # If the price is set up
     try: 
         fixed_price = float(argv[6])
@@ -182,6 +202,9 @@ try:
     except:
         time_restriction = 0
 
+    ### Greetings (for logs readability) 
+    lprint(["###################### SMART_BUY ###########################"])
+        
 except:
     print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
     exit(0)
@@ -200,7 +223,7 @@ td_data_available = True  # default which will be changed to False when needed
 time.sleep(int(30/speedrun))
 
 try: 
-    bars = td_info.stats(market, exchange_abbr, '4h', 50000, 10)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -382,7 +405,7 @@ def ensure_balance():
         
         # Changing the available balance and changing the value if there is no enough funds       
         if exchange == 'bitmex': 
-            return True 
+            return True     # works fine for bitmex (can go slightly beyond the margin), there are issues with other exchanges only 
         else: 
             if Decimal(str(balance_avail)) < Decimal(str(source_position)): 
                 source_position = Decimal(str(balance_avail))  
@@ -485,6 +508,7 @@ while buy_flag and approved_flag:
             # If we are on bitmex - first we need to get the order info and then to cancel 
             if exchange == 'bitmex': 
                 order_info = getorder(exchange, market, buy_uuid)
+                #print '\n\nORDER INFO', order_info, '\n\n' #DEBUG
                 cancel_stat = cancel(exchange, market, buy_uuid)
                 time.sleep(5) 
             else: 
@@ -603,7 +627,7 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the 4H candles price data'])    
                     time_hour = time_hour_update
-                    bars = td_info.stats(market, exchange_abbr, '4h', 50000, 5)   
+                    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)   
                 check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
                 lprint([ exchange, ": TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
                 lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
@@ -629,7 +653,7 @@ while buy_flag and approved_flag:
         ratio = ratio.quantize(Decimal('1.01'))
 
         if (ratio < 0.99 or ratio == 0) and (approved_flag):           
-            lprint(['Ratio (0 is not started):', ratio])  # DEBUG FOR FUTURE
+            lprint(['Ratio (0 is not started):', ratio])  # DEBUG  
             # If we are using market price (smartbuy)
             if fixed_price_flag != True:      
                 # Getting prices if we have not specified a fixed one 
@@ -655,9 +679,9 @@ while buy_flag and approved_flag:
  
                 if exchange == 'bitmex': # need to do this in contracts because the api returns contracts and not xbt filled           
                     quantity = round(Decimal(str(source_position)), 6)
-                    bitmex_margin = 4.99 
                     buy_rate = round(buy_rate, 0) 
-                    contracts = round(quantity * buy_rate * bitmex_margin)    
+                    contracts = round(quantity * buy_rate)   # margin is already accounted for in the main code     
+                    # print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
     
                 str_status = 'Quantity to buy {}'.format(quantity)  
                 lprint([str_status])    
@@ -676,13 +700,19 @@ while buy_flag and approved_flag:
                     if quantity > 0.0: 
                         # Bitmex is a bit special 
                         if exchange == 'bitmex':  
-                            print 'Contracts {} buy_rate {}'.format(contracts, buy_rate) #DEBUG    
-                            buy_result = buylimit(exchange, market, None, buy_rate, contracts)  
+                            # Open a long or a short depending on the requested side 
+                            if short_flag: 
+                                print 'Contracts (short) {} buy_rate {}'.format(contracts, buy_rate) #DEBUG    
+                                buy_result = selllimit(exchange, market, None, buy_rate, contracts)  
+                            else: 
+                                print 'Contracts (long) {} buy_rate {}'.format(contracts, buy_rate) #DEBUG    
+                                buy_result = buylimit(exchange, market, None, buy_rate, contracts)  
                         else: 
                             print 'Quantity {} buy_rate {}'.format(quantity, buy_rate) #DEBUG    
                             buy_result = buylimit(exchange, market, quantity, buy_rate)  
 
-                        print "> Result", buy_result #DEBUG
+                        #print "\n>>> Result", buy_result #DEBUG
+                        lprint(["-------------------------------------------------------------------- \n>> Result:", buy_result, "\n--------------------------------------------------------------------"])  # DEBUG # 
                         
                         if buy_result == 'MIN_TRADE_REQUIREMENT_NOT_MET': 
                             # If trade requirement were not met or an error occured       

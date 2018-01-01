@@ -22,20 +22,26 @@ decimal.getcontext().prec = 20
 
 # Initialising clients with api keys 
 
-api_bittrex = bittrex('YOUR_KEY', 'YOUR_SECRET_KEY')
+api_bittrex = bittrex('KEY', 'SECRET')
 
 binance = ccxt.binance ({
-    'apiKey': 'YOUR_KEY',
-    'secret': 'YOUR_SECRET_KEY',
+    'apiKey': 'KEY',
+    'secret': 'SECRET',
+})
+
+bitstamp = ccxt.bitstamp ({     # Not ready to use 
+    'apiKey': 'KEY',
+    'secret': 'SECRET',
+    'uid': 'UID', 
 })
 
 bitmex = ccxt.bitmex ({
-    'apiKey': 'YOUR_KEY',
-    'secret': 'YOUR_SECRET_KEY',
+    'apiKey': 'KEY',
+    'secret': 'SECRET',
 })
-
+ 
 # Configure wanted margin on bitmex
-bitmex_margin = 4.99 
+bitmex_margin = 4.5
 
 ################################ Functions ############################################
 
@@ -45,6 +51,135 @@ def market_std(market):
     market = market_str[1] + '/' + market_str[0]
     return market 
 
+#### Bitstamp functions - using cctx 
+def bitstamp_ticker(market): 
+    market = market_std(market)    
+    ticker = bitstamp.fetch_ticker(market)['last']
+    return Decimal(ticker) 
+    
+def bitstamp_balances(): 
+    balances_return = []
+    balances = bitstamp.fetch_balance()
+    
+    # Do not need these values 
+    del balances['info']
+    del balances['free']
+    del balances['used']
+    del balances['total']
+    for key, value in balances.iteritems():
+        balance_total = float(value['total'])
+        arr_row = {'Currency':key, 'Balance':float(balance_total), 'Available':float(value['free'])}
+        balances_return.append(arr_row)
+    return balances_return
+
+def bitstamp_get_balance(currency):
+    output = {} # to make consistent with the overall script
+    output['Available'] = 0 
+    balances = binance.fetch_balance ()
+    # Do not need these values 
+    del balances['info']
+    del balances['free']
+    del balances['used']
+    del balances['total']
+    
+    for key, value in balances.iteritems():
+        if key == currency:
+            output['Available'] = float(value['free'])       
+    return output
+
+def bitstamp_orderbook(market):
+    market = market_std(market)    
+    bids = bitstamp.fetch_order_book(market)['bids']
+    output_buy_list = []
+    output_sell_list = []
+    for bid in bids:
+        temp_dict = {}
+        temp_dict["Rate"] = float(bid[0])  # For consistency with the main code        
+        temp_dict["Quantity"] = float(bid[1])
+        output_buy_list.append(temp_dict)
+    return output_buy_list
+    
+def bitstamp_openorders(market): # returns my open orders.
+    market = market_std(market)    
+    
+    retry = True 
+    while retry:  #  added a condition to handle nonce issues     
+        try: 
+            trades = bitstamp.fetch_open_orders(symbol = market, since = None, limit = None, params = {})
+            retry = False 
+        except: 
+            retry = True 
+            
+    #print trades
+    result = []
+    for trade in trades: 
+        temp_dict = {}
+        temp_dict["OrderUuid"]  = trade["id"]
+        temp_dict["PricePerUnit"] = trade["price"]
+        temp_dict['Quantity'] = Decimal(str(trade["amount"]))
+        temp_dict["Price"] = Decimal(str(trade["amount"]))*Decimal(str(trade["price"]))
+        temp_dict["QuantityRemaining"] = None 
+        temp_dict["Limit"] = ''   #not really used but is showed for bittrex 
+        result.append(temp_dict)
+    return result    
+
+    
+def bitstamp_get_order(market, item):     # This bitstamp function is unfinished 
+    # We will need ['Price'] , ['CommissionPaid'], ['Quantity'] , ['QuantityRemaining'] , ['PricePerUnit']
+    # Bistamp orders can be Open, In Queue, Finished. Open do not have any data compared to the other types 
+    
+    output = {}
+    market = market_std(market)    
+    
+    retry = True 
+    while retry:  #  added a condition to handle nonce issues     
+        try: 
+            order = bitstamp.fetch_order(item, symbol = market, params = {})
+            retry = False 
+            print order 
+        except: 
+            retry = True  
+            
+    if order['transactions'] == []: # if the order was not even started to be filled - we will need to grab info from another method ( ? orderhistory) 
+        print 'unfullfilled'
+    else: 
+        print 'finished' 
+    
+    ''' 
+    if order['status'] == 'Open': 
+        trades = bitstamp.fetch_open_orders(symbol = market, since = None, limit = None, params = {})
+        for trade in trades: 
+            if trade['id'] == item: 
+                output['Price'] = Decimal(str(trade["amount"]))*Decimal(str(trade["price"]))
+                output['Quantity'] = Decimal(str(trade["amount"]))
+                output['QuantityRemaining'] = output['Quantity'] #open
+                output['PricePerUnit'] =  Decimal(str(order['info']["price"]))
+                output['CommissionPaid'] = Decimal(0) 
+    
+    output = {}
+    output['Price'] = Decimal(str(order['info']["price"])) * Decimal(str(order['info']['origQty']))
+    output['Quantity'] = Decimal(str(order['info']['origQty']))
+    output['PricePerUnit'] =  Decimal(str(order['info']["price"]))
+    output['QuantityRemaining'] = Decimal(str(order['info']['origQty'])) - Decimal(str(order['info']['executedQty']))
+    if binance_order['fee'] is not None:    # it is always none, look at the original github code and contribute a fix 
+        try:    
+            output['CommissionPaid'] = Decimal(order['fee'])
+        except: 
+            output['CommissionPaid'] = Decimal(str(order['info']['price'])) * Decimal(str(0.0025)) 
+    else:
+        output['CommissionPaid'] = Decimal(str(order['info']['price'])) * Decimal(str(0.0025)) 
+    ''' 
+    return output   
+    
+def bitstamp_cancel(market, orderid): 
+    market = market_std(market)    
+    try:
+        cancel_result = bitstamp.cancel_order(id = orderid, params = {}) 
+    except: # error handling 
+        cancel_result = 'unknown order' 
+    return cancel_result    
+    
+    
 #### Bitmex functions - using cctx  
 def bitmex_ticker(market): 
     market = market_std(market)    
@@ -68,6 +203,10 @@ def bitmex_openorders(market): # returns my open orders, not initially available
         temp_dict["QuantityRemaining"] = Decimal(bitmex_order["leavesQty"])
         temp_dict["Price"] = bitmex_order["price"]
         temp_dict["Limit"] = '' #not really used but is showed for bittrex 
+        if bitmex_order["side"] == 'Sell': 
+             temp_dict["type"] = 'short' 
+        else: 
+             temp_dict["type"] = 'long'   
         result.append(temp_dict)
     return result
     
@@ -107,12 +246,12 @@ def bitmex_orderbook(market):
         output_buy_list.append(temp_dict)
     return output_buy_list
 
-def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # long position 
+def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # Open a long 
     market = market_std(market)    
     msg = ''  
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
-        contracts = round(quantity_buy * buy_rate * bitmex_margin)  
+        contracts = round(quantity_buy * buy_rate)     #* bitmex_margin)     # accounting for margin in the main code anyways 
     try: 
         result = bitmex.createOrder(market, 'limit', 'Buy', contracts, float(buy_rate), params = {})
         result['uuid'] = result['id']  # for consistency in the main code 
@@ -123,12 +262,12 @@ def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # long
     else: 
        return result       
        
-def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # short position 
+def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # Open a short
     market = market_std(market)    
     msg = ''  
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
-        contracts = round(quantity_sell * sell_rate * bitmex_margin) 
+        contracts = round(quantity_sell * sell_rate) #* bitmex_margin)     # accounting for margin in the main code anyways 
     try: 
         result = bitmex.createOrder (market, 'limit', 'Sell', contracts, float(sell_rate), params = {})
         result['uuid'] = result['id']  # for consistency in the main code 
@@ -142,16 +281,17 @@ def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # s
 # A few additional functions relevant to bitmex only (positions and not orders)        
 def bitmex_openpositions(market):  
     market = market_std(market)    
-    positions = bitmex.fetchPositions(symbol = market, since = None, limit = 300, params = {})  #HERE
+    positions = bitmex.fetchPositions(symbol = market, since = None, limit = 300, params = {})   
     result = []
     for position in positions: 
+        # print position 
         temp_dict = {}
         if position["isOpen"] is True: 
             if position["simpleCost"] > 0: 
                 temp_dict["type"]  = 'long'
             else: 
                 temp_dict["type"]  = 'short'
-            temp_dict['xbt'] = position['homeNotional']
+            temp_dict['xbt'] = abs(position['homeNotional']) # using abs here because we will be working on both longs and shorts 
             temp_dict['contracts'] = abs(position['simpleCost'])
             temp_dict['entryprice'] = position['avgEntryPrice']
         result.append(temp_dict)
@@ -182,7 +322,6 @@ def bitmex_get_sell_ordhist(market):  # only need sell (short) orders (IDs)
         listoforders.append(temp_dict)
     return listoforders
      
-
     
 #### Binance functions - using cctx 
 def binance_ticker(market): 
@@ -271,7 +410,6 @@ def binance_get_sell_ordhist(market):     # only need sell orders (IDs)
 def binance_openorders(market): # returns my open orders 
     market = market_std(market)    
     orders = binance.fetchOpenOrders(symbol = market, since = None, limit = None, params = {})
-    
     result = []
     for binance_order in orders: 
         temp_dict = {}
@@ -314,17 +452,14 @@ def binance_cancel(market, orderid):
    
 def binance_orderbook(market):
     market = market_std(market)    
-    bids = binance.fetch_order_book (market)['bids']
-   
+    bids = binance.fetch_order_book(market)['bids']
     output_buy_list = []
     output_sell_list = []
-    
     for bid in bids:
         temp_dict = {}
         temp_dict["Rate"] = float(bid[0])  # For consistency with the main code        
         temp_dict["Quantity"] = float(bid[1])
         output_buy_list.append(temp_dict)
-
     return output_buy_list
 
 def binance_buylimit(market, quantity_buy, buy_rate):    
@@ -393,6 +528,8 @@ def getticker(exchange, market):
         return binance_ticker(market)
     elif exchange == 'bitmex': 
         return bitmex_ticker(market)
+    elif exchange == 'bitstamp': 
+        return bitstamp_ticker(market) 
     else: 
         return 0  
          
@@ -403,6 +540,8 @@ def getopenorders(exchange, market):
         return binance_openorders(market)
     elif exchange == 'bitmex':
         return bitmex_openorders(market) 
+    elif exchange == 'bitstamp':
+        return bitstamp_openorders(market)
     else:
         return 0
 
@@ -413,6 +552,8 @@ def cancel(exchange, market, orderid):
         return binance_cancel(market, orderid) 
     elif exchange == 'bitmex':
         return bitmex_cancel(market, orderid) 
+    elif exchange == 'bitstamp':
+        return bitstamp_cancel(market, orderid) 
     else:
         return 0
 
@@ -433,6 +574,8 @@ def getorder(exchange, market, item):
         return binance_get_order(market, item)
     elif exchange == 'bitmex':
         return bitmex_get_order(market, item) 
+    elif exchange == 'bitstamp':
+        return bitstamp_get_order(market, item) 
     else:
         return 0
 
@@ -464,6 +607,14 @@ def getbalance(exchange, currency):
             except:
                 failed_attempts += 1
         return curr_balance
+    elif exchange == 'bitstamp':
+        while retry:
+            try:
+                curr_balance = bitstamp_get_balance(currency)
+                retry = False
+            except:
+                failed_attempts += 1
+        return curr_balance
     else:
         return 0
 
@@ -472,6 +623,8 @@ def getbalances(exchange):
         return api_bittrex.getbalances() 
     elif exchange == 'binance': 
         return binance_balances()
+    elif exchange == 'bitstamp': 
+        return bitstamp_balances()
     else: 
         return 0 
 
@@ -502,6 +655,8 @@ def getorderbook(exchange, market):
         return binance_orderbook(market)
     elif exchange == 'bitmex':
         return bitmex_orderbook(market)
+    elif exchange == 'bitstamp':
+        return bitstamp_orderbook(market)
     else:
         return 0  
 

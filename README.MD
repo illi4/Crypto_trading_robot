@@ -2,9 +2,13 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing time series indicator. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex (bitmex is supported for xbt/usd pairs only). 
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex (bitmex is supported for xbt/usd pairs only). 
 
-Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly. 
+Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
+
+However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified length (default it 4H) and open / close long and short positions (shorts are supported on bitmex only). The image below illustrates the logic: 
+
+![candles_logic](images/candles.png?raw=true "Candles_logic")
 
 ## Files 
 
@@ -101,7 +105,9 @@ Please use the scripts at your own risk. I am not responsible for your API keys 
 
 ## Contributions 
 
-As there are many other exchanges out there except for bittrex and binance, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py (cobinhood will be an immediate priority). Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
+As there are many other exchanges out there except for included ones, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py (cobinhood will be an immediate priority). Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
+
+Moveover, the code can definitely be cleaned and improved further. E.g. some functions can be separated in modules, and settings can be externalised in a separate file rather than hardcoded. 
 
 Please feel free to contribute on github directly or contact me first via Telegram (illi4).
 
