@@ -985,25 +985,28 @@ def sell_now(at_price):
 
     # For bitmex, we will be trading contracts, no adjustments are available. Getting the balances and setting the original value 
     if exchange == 'bitmex': 
-        # There were issues with testnet returning blanks so changed this 
-        contracts_check = {}
-        positions = getpositions(exchange, market)  # first not empty result 
-        for position in positions: 
-            if position != {}: 
-                contracts_check = position 
-                break # exit the for loop 
-        # If nothing was found  
-        if contracts_check == {}: 
-            sell_run_flag = False
-            contracts = 0
-        else: 
-            contracts = contracts_check['contracts'] 
-            contracts_start = contracts
-            balance_available = contracts
-            balance_adjust = 0 
-            sell_portion = balance_available
-        # Original value 
-        value_original = Decimal(str(contracts_check['xbt']))
+        if simulation != True: 
+            # There were issues with testnet returning blanks so changed this 
+            contracts_check = {}
+            positions = getpositions(exchange, market)  # first not empty result 
+            for position in positions: 
+                if position != {}: 
+                    contracts_check = position 
+                    break # exit the for loop 
+            # If nothing was found  
+            if contracts_check == {}: 
+                sell_run_flag = False
+                contracts = 0
+            else: 
+                contracts = contracts_check['contracts'] 
+                contracts_start = contracts
+                balance_available = contracts
+                balance_adjust = 0 
+                sell_portion = balance_available
+            # Original value 
+            value_original = Decimal(str(contracts_check['xbt']))
+        else: # if we are in the simulation mode 
+            contracts =  get_last_price(market) * simulation_balance
     else: # for other exchanges     
         value_original = Decimal(str(price_entry)) * balance_start    
  
