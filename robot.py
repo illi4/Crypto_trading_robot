@@ -110,12 +110,17 @@ try:
         exchange = 'bitmex' 
         comission_rate = 0
         
-    trade = argv[3].upper() 
-    currency = argv[4].upper()
-    price_curr = float(argv[5])
+    market = argv[3].upper()
+    try:
+        trade, currency = market.split('-')
+    except: 
+        trade = market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+        currency = 'BTC'
 
-    price_target = float(argv[6])
-    sl_target = float(argv[7])
+    price_curr = float(argv[4])
+
+    price_target = float(argv[5])
+    sl_target = float(argv[6])
     price_entry = price_curr
 
     tp = round(price_target/price_curr, 5)
@@ -124,23 +129,23 @@ try:
     sl_p = (1.0 - sl)*100.0 
 
     try:
-        limit_sell_amount = float(argv[8])
+        limit_sell_amount = float(argv[7])
     except: 
         limit_sell_amount = 0
     try:
-        sell_portion = float(argv[9])
+        sell_portion = float(argv[8])
     except: 
         sell_portion = None    
     # print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  #DEBUG   
 except:
     no_input = True 
 
-# Terminate if there is no proper input 
+# Terminate if there is no proper input   #CHANGE - DESCR
 if no_input:
     print '----------------------------------------------------------------------------------------------\n' + \
     'Run parameters not specified. Restart the script using:\n' + \
-    'robot.py simulation (s/r/sns/rns) exchange basic_curr altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion]\n' +\
-    'Example: > python robot.py s btrx BTC LTC 0.0017 0.0021 0.0015 100\n\n' +\
+    'robot.py simulation (s/r/sns/rns) exchange basic_curr-altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion]\n' +\
+    'Example: > python robot.py s btrx BTC-LTC 0.0017 0.0021 0.0015 100\n\n' +\
     'Modes:\n>s (simulation with stop-loss)\n>r (real mode with stop-loss)\n>sns (simulation and stop only on profit)\n>rns (real and stop only on profit)'  
     exit(0) 
     
@@ -150,9 +155,7 @@ if simulation is True:
         limit_sell_amount = 100
     simulation_balance = limit_sell_amount
     sell_portion = limit_sell_amount
-    
-### Market to trade 
-market = '{0}-{1}'.format(trade, currency)
+
         
 ### Prices 
 # something should be bought at a price_curr level to start from  
@@ -629,12 +632,14 @@ def sell_orders_info():
                         main_curr_from_sell += order_info['Price']  
                         commission_total += order_info['CommissionPaid']
                         qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
-                        alt_sold_total += qty_sold             
+                        alt_sold_total += qty_sold                            
                         lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
                     else: 
                         price_exit = bitmex_sell_avg
-                        main_curr_from_sell = contracts_start/price_exit
-                        
+                        if market == 'USD-BTC': 
+                            main_curr_from_sell = contracts_start/price_exit
+                        else: 
+                            main_curr_from_sell = contracts_start*price_exit
                 lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
         else:
             # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
@@ -996,18 +1001,24 @@ def sell_now(at_price):
                 if position != {}: 
                     contracts_check = position 
                     break # exit the for loop 
+            print 'contracts_check', contracts_check #TEST 
             # If nothing was found  
             if contracts_check == {}: 
                 sell_run_flag = False
                 contracts = 0
             else: 
-                contracts = contracts_check['contracts'] 
+                if market == 'USD-BTC': 
+                    contracts = contracts_check['contracts'] 
+                    value_original = Decimal(str(contracts_check['contracts_no']))
+                else: 
+                    contracts = contracts_check['contracts_no'] 
+                    value_original = Decimal(str(contracts))*Decimal(price_entry) #HERE
+               
                 contracts_start = contracts
                 balance_available = contracts
                 balance_adjust = 0 
                 sell_portion = balance_available
-            # Original value 
-            value_original = Decimal(str(contracts_check['xbt']))
+             
         else: # if we are in the simulation mode 
             contracts =  get_last_price(market) * simulation_balance
             contracts_start = contracts
@@ -1086,7 +1097,10 @@ def sell_now(at_price):
             if contracts_check == {}: 
                 sell_run_flag = False
             else: 
-                contracts = contracts_check['contracts'] 
+                if market == 'USD-BTC': 
+                    contracts = contracts_check['contracts'] 
+                else: 
+                    contracts = contracts_check['contracts_no'] 
                 balance_available = contracts
                 balance_adjust = 0 
                 sell_portion = balance_available
@@ -1137,7 +1151,10 @@ def sell_now(at_price):
                     # For bitmex, we will be placing contracts in the other direction (short)
                     if exchange == 'bitmex': 
                         # Balance_available is the number of contracts here. Creating orders depending on the side (long or short) 
-                        price_to_sell = round(price_to_sell, 0)
+                        if market == 'USD-BTC': 
+                            price_to_sell = round(price_to_sell, 0)
+                        else: 
+                            price_to_sell = round(price_to_sell, 20)
                         bitmex_sell_avg_arr.append(price_to_sell) 
                         
                         if short_flag != True: #LONG
@@ -1631,9 +1648,9 @@ try:
         
         # Run a smart buy task now when we have a buyback confirmation 
         if direction == 'up': #LONGS 
-            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade, currency, str(buy_trade_price)])
+            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
         elif direction == 'down': #SHORTS - need to change plus to minus
-            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade, currency, str(-buy_trade_price)])
+            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
         print '>>>' + python_call
         p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
         while True:

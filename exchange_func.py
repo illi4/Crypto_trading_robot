@@ -46,9 +46,12 @@ bitmex_margin = 4.5
 ################################ Functions ############################################
 
 ### CCTX functions common 
-def market_std(market): 
-    market_str = market.split('-')
-    market = market_str[1] + '/' + market_str[0]
+def market_std(market):   
+    try: 
+        market_str = market.split('-')
+        market = market_str[1] + '/' + market_str[0]
+    except: 
+        pass 
     return market 
 
 #### Bitstamp functions - using cctx 
@@ -124,7 +127,7 @@ def bitstamp_openorders(market): # returns my open orders.
     return result    
 
     
-def bitstamp_get_order(market, item):     # This bitstamp function is unfinished 
+def bitstamp_get_order(market, item):     #Unfinished 
     # We will need ['Price'] , ['CommissionPaid'], ['Quantity'] , ['QuantityRemaining'] , ['PricePerUnit']
     # Bistamp orders can be Open, In Queue, Finished. Open do not have any data compared to the other types 
     
@@ -181,8 +184,8 @@ def bitstamp_cancel(market, orderid):
     
     
 #### Bitmex functions - using cctx  
-def bitmex_ticker(market): 
-    market = market_std(market)    
+def bitmex_ticker(market):   
+    market = market_std(market)
     ticker = bitmex.fetch_ticker(market)['close']
     return Decimal(ticker) 
 
@@ -246,9 +249,10 @@ def bitmex_orderbook(market):
         output_buy_list.append(temp_dict)
     return output_buy_list
 
-def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # Open a long 
+def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # Open a long    
     market = market_std(market)    
     msg = ''  
+    buy_rate = bitmex_convert_price(market, buy_rate) 
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
         contracts = round(quantity_buy * buy_rate)     #* bitmex_margin)     # accounting for margin in the main code anyways 
@@ -262,17 +266,19 @@ def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # Open
     else: 
        return result       
        
-def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # Open a short
+def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # Open a short      
     market = market_std(market)    
-    msg = ''  
+    msg = ''   
+    sell_rate = bitmex_convert_price(market, sell_rate)  
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
         contracts = round(quantity_sell * sell_rate) #* bitmex_margin)     # accounting for margin in the main code anyways 
-    try: 
-        result = bitmex.createOrder (market, 'limit', 'Sell', contracts, float(sell_rate), params = {})
-        result['uuid'] = result['id']  # for consistency in the main code 
-    except: 
-        msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+    #try: 
+    result = bitmex.createOrder (market, 'limit', 'Sell', contracts, float(sell_rate), params = {})
+    print result #DEBUG
+    result['uuid'] = result['id']  # for consistency in the main code 
+    #except: 
+    #    msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
     if msg <> '': 
         return msg 
     else: 
@@ -321,6 +327,15 @@ def bitmex_get_sell_ordhist(market):  # only need sell (short) orders (IDs)
         temp_dict['OrderUuid'] = order["orderID"]
         listoforders.append(temp_dict)
     return listoforders
+     
+def bitmex_convert_price(market, price):  #fixes price considering the TickSize 
+    market = market_std(market)   
+    markets = bitmex.load_markets ()
+    tickSize = markets[market]['info']['tickSize']
+    getcontext().rounding = 'ROUND_DOWN'
+    price = Decimal(str(price))
+    price = price.quantize(Decimal(str(tickSize)))
+    return price 
      
     
 #### Binance functions - using cctx 

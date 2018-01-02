@@ -42,12 +42,12 @@ send_messages = True
 ############################## MONITORING BOT ######################################
 #####################################################################################
 
-# A few commonly used functions
+# A few commonly used functions             
 def telegram_buy(wf_id = None):  
     global platform_run, cmd_init_buy, chat
     print cmd_init_buy 
     
-    reply_string = 'Specify the parameters (e.g. "4h btrx usdt btc 7957") \nmode exchange basic_curr altcoin [total_in_basic_curr] [price] [time limit for the price in minutes] \n\n'\
+    reply_string = 'Specify the parameters (e.g. "4h btrx usdt-btc 7957") \nmode exchange basic_curr altcoin [total_in_basic_curr] [price] [time limit for the price in minutes] \n\n'\
     '>>Example: reg btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes,'\
     'then switches to market prices \n\nModes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
     'options with -s mean simulation mode \n'\
@@ -65,102 +65,118 @@ def telegram_buy(wf_id = None):
         # Processing params - should all be entered
         buy_mode = msg_text_split[0].lower()
         buy_exchange = msg_text_split[1].lower()
-        buy_trade = msg_text_split[2].upper()
-        buy_currency = msg_text_split[3].upper()
+        
+        buy_market = msg_text_split[2].upper()
+        try:
+            buy_trade, buy_currency = buy_market.split('-')
+        except: 
+            buy_trade = buy_market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+            buy_currency = 'BTC'
         
         try: 
-            buy_total = msg_text_split[4]
+            buy_total = msg_text_split[3]
         except: 
             buy_total = '' 
         
         try: 
-            buy_price = msg_text_split[5]
+            buy_price = msg_text_split[4]
         except: 
             buy_price = ''
         
         # print buy_trade, buy_currency, buy_total, buy_price # DEBUG
         try:
-            buy_time_limit = msg_text_split[6]
+            buy_time_limit = msg_text_split[5]
         except: 
-            buy_time_limit = ''
+            buy_time_limit = '' 
         
         if wf_id is not None: 
-            buy_market = '{0}-{1}'.format(buy_trade, buy_currency)
+            #buy_market = '{0}-{1}'.format(buy_trade, buy_currency)
             sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(buy_market, buy_trade, buy_currency, buy_exchange, wf_id) 
             job_id, rows = query_lastrow_id(sql_string)
             
         # Run depending on the platform
         if platform_run == 'Windows': 
-            cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_trade, buy_currency, buy_total, buy_price, buy_time_limit])
+            cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_market, buy_total, buy_price, buy_time_limit])
             # cmd_init_buy is 'start cmd /K python robot.py '
         else: 
             # Nix
-            cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_trade, buy_currency, buy_total, buy_price, buy_time_limit]) + '"'
+            cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_market, buy_total, buy_price, buy_time_limit]) + '"'
             # cmd_init_buy is 'gnome-terminal --tab --profile Active -e "python /home/illi4/Robot/robot.py'   # we will also need to add params and close with "
         
         # print "CMD: " + cmd_str # DEBUG
         os.system(cmd_str)
-
         chat.send('Buy task requested')
-        print '>>> Started a new buy job: {} {} {} {} {}'.format(buy_trade, buy_currency, buy_total, buy_price, buy_time_limit)
+        print '>>> Started a new buy job: {} {} {} {} {}'.format(buy_market, buy_total, buy_price, buy_time_limit)
     except: 
         chat.send('Not all the mandatory parameters are specified')    
                 
 def telegram_sell(wf_id = None): 
     global platform_run, cmd_init, chat
 
-    chat.send('Specify the parameters: simulation (s/r/sns/rns/rnts) exchange basic_curr altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion] \nExample: s btrx BTC LTC 0.0017 0.0021 0.0019 100')
+    chat.send('Specify the parameters: simulation (s/r/sns/rns/rnts) exchange basic_curr-altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion] \nExample: s btrx BTC-LTC 0.0017 0.0021 0.0019 100')
     # Wait for a response
     msg_text = chat.get_response()
 
     # Starting a new process with a new task 
     msg_text_split = msg_text.split()
     # Processing params - should all be entered
+    
     try: 
         run_simulation_param = msg_text_split[0].lower()
         run_exchange = msg_text_split[1].lower()   
-        run_trade = msg_text_split[2].upper()
-        run_currency = msg_text_split[3].upper()
-        run_price_curr = msg_text_split[4]
-        run_tp = msg_text_split[5]
-        run_sl = msg_text_split[6]
-
+        
+        run_market = msg_text_split[2].upper()
+        try:
+            run_trade, run_currency = run_market.split('-')
+        except: 
+            run_trade = run_market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+            run_currency = 'BTC'
+            
+        #run_trade = msg_text_split[2].upper()
+        #run_currency = msg_text_split[3].upper()
+        run_price_curr = msg_text_split[3]
+        run_tp = msg_text_split[4]
+        run_sl = msg_text_split[5]
+        
+        ''' # Not applicable for shorts 
         if float(run_tp) < float(run_sl): 
-            chat.send('TP trigger less then the SL trigger - reversing these variables') # yes, this happened once
+            chat.send('TP trigger less then the SL trigger - reversing these variables')  
             tmp_targ = run_tp
             run_tp = run_sl
             run_sl = tmp_targ
+        ''' 
         
         try:
-            run_limit_sell_amount = msg_text_split[7]
+            run_limit_sell_amount = msg_text_split[6]
         except: 
             run_limit_sell_amount = ''
         try:
-            run_sell_portion = msg_text_split[8]
+            run_sell_portion = msg_text_split[7]
         except: 
             run_sell_portion = ''
 
         # Run depending on the platform
         if platform_run == 'Windows': 
-            cmd_str = cmd_init + ' '.join([run_simulation_param, run_exchange, run_trade, run_currency, run_price_curr, run_tp, run_sl, run_limit_sell_amount, run_sell_portion])
+            cmd_str = cmd_init + ' '.join([run_simulation_param, run_exchange, run_market, run_price_curr, run_tp, run_sl, run_limit_sell_amount, run_sell_portion])
         else: 
             # Nix
-            cmd_str = cmd_init + ' '.join([run_simulation_param, run_exchange, run_trade, run_currency, run_price_curr, run_tp, run_sl, run_limit_sell_amount, run_sell_portion]) + '"'
+            cmd_str = cmd_init + ' '.join([run_simulation_param, run_exchange, run_market, run_price_curr, run_tp, run_sl, run_limit_sell_amount, run_sell_portion]) + '"'
         os.system(cmd_str)
         
         # Check if launched fine  
         chat.send('Launching, hold on...')
         time.sleep(30)
-        sql_string = "SELECT job_id FROM jobs WHERE market = '{}-{}'".format(run_trade.upper(), run_currency.upper())
+        sql_string = "SELECT job_id FROM jobs WHERE market = '{}'".format(run_market.upper())
         rows = query(sql_string)
 
         try: 
             launched_confirmation = rows[0][0]   # first result if existing 
-            print '>>> Started a new job on the market {}-{}. Simulation mode: {}'.format(run_trade.upper(), run_currency.upper(), run_simulation_param)
+            print '>>> Started a new job on the market {}. Simulation mode: {}'.format(run_market.upper(), run_simulation_param)
             chat.send('Launched a new bot with these parameters')
         except:
             chat.send('The job was not launched')
 
+        
     except: 
         chat.send('Not all the mandatory parameters are specified')
 

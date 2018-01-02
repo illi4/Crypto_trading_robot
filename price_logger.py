@@ -39,6 +39,8 @@ dir_to = '/home/illi4/Dropbox/Exchange/price_log'
 
 # List of cryptos   
 markets_list = [
+    #['BTC-CTR' , 'BINA'], 
+    #['BTC-MUSIC' , 'BTRX'], 
     ['USDT-USD', 'KRKN'], 
     ['USDT-BTC', 'BTRX'], 
     ['USDT-BTC' , 'BINA'], 
@@ -49,15 +51,14 @@ markets_list = [
     ['BTC-NEO' , 'BTRX'], 
     ['BTC-ETH' , 'BTRX'], 
     ['BTC-POWR' , 'BTRX'],
-    ['BTC-CTR' , 'BINA'], 
-    ['BTC-MUSIC' , 'BTRX'], 
     ['XBT-USD' , 'BMEX'], 
-    ['USD-BTC' , 'BITS']       
+    ['USD-BTC' , 'BITS'],       
+    ['XRPH18', 'BMEX']
 ]
 
 ################################ Code ############################################
 
-usdt_exchanges_list = ['btrx', 'bina']   # exchanges list 
+usdt_exchanges_list = ['btrx', 'bina']   # exchanges list where you hold USDT - if it collapses, USDT is sold immediately
 
 markets = []
 usdt_arr_min = []   # min for minute
@@ -66,7 +67,7 @@ failed_attempts_dict = {}   # failed attempts
 time_failed = {} 
 
 for elem in markets_list:
-    # There is an exception for bitmex and their naming  
+    # There is an exception for bitmex and the naming there
     if elem[0] == 'XBT-USD' and elem[1] == 'BMEX': 
         name_id = 'USD-BTC_bmex'
         filename = 'price_log/' + name_id + '.csv'
@@ -137,24 +138,13 @@ while True:
 
                     # Getting BTC for the whole balance in a case of collapse 
                     # Buy depending on the platform 
-                    for usdt_exch_abbr in usdt_exchanges_list: 
-                        # USDT balance
-                        if usdt_exch_abbr == 'btrx': 
-                            exchange_usdt = 'bittrex'
-                            comission_rate = 0.003
-                        elif usdt_exch_abbr == 'bina': 
-                            exchange_usdt = 'binance'
-                            comission_rate = 0.001
-                        
-                        balance = getbalance(exchange_usdt, 'USDT')
-                        balance_avail = balance['Available'] * (1.0 - comission_rate)    
-                    
+                    for usdt_exch_abbr in usdt_exchanges_list:                          
                         if platform_run == 'Windows': 
-                            cmd_str = cmd_init_buy + ' '.join(['now', usdt_exch_abbr, 'USDT', 'BTC', str(balance_avail)])     
+                            cmd_str = cmd_init_buy + ' '.join(['now', usdt_exch_abbr, 'USDT', 'BTC' ])       # buying for the whole balance     
                             # cmd_init_buy is 'start cmd /K python robot.py '
                         else: 
                             # Nix
-                            cmd_str = cmd_init_buy + ' '.join(['now', usdt_exch_abbr, 'USDT', 'BTC', str(balance_avail)]) + '"'     
+                            cmd_str = cmd_init_buy + ' '.join(['now', usdt_exch_abbr, 'USDT', 'BTC' ]) + '"'     # buying for the whole balance     
                         os.system(cmd_str)
         
         # If there are issues with getting the price 

@@ -165,16 +165,19 @@ try:
         comission_rate = 0          # no commissions as such when opening a position 
 
     # Main currency (e.g. BTC) 
-    trade = argv[3].upper()
-    currency = argv[4].upper()
-    market = '{0}-{1}'.format(trade, currency)
+    market = argv[3].upper()
+    try:
+        trade, currency = market.split('-')
+    except: 
+        trade = market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+        currency = 'BTC'
     
     # New logger
     logger = logfile(market, 'buy')    
 
     # Getting for the whole if there is no input 
     try: 
-        source_position = float(argv[5])
+        source_position = float(argv[4])
         # For bitmex shorts 
         if source_position < 0: 
             short_flag = True 
@@ -190,7 +193,7 @@ try:
     
     # If the price is set up
     try: 
-        fixed_price = float(argv[6])
+        fixed_price = float(argv[5])
         fixed_price_flag = True
     except:
         fixed_price = 0
@@ -198,7 +201,7 @@ try:
         
     # Time restriction for fixed price orders in minutes
     try: 
-        time_restriction = float(argv[7])
+        time_restriction = float(argv[6])
     except:
         time_restriction = 0
 
@@ -206,7 +209,7 @@ try:
     lprint(["###################### SMART_BUY ###########################"])
         
 except:
-    print 'Specify the parameters: mode exchange basic_curr altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
+    print 'Specify the parameters: mode exchange basic_curr-altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC-QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
     exit(0)
     
 ### Thresholds for buys on 4H 
@@ -528,10 +531,16 @@ while buy_flag and approved_flag:
                 price_unit = 0
             
             if exchange == 'bitmex': 
-                source_filled = Decimal(str(quantity_filled/price_unit))
-                sum_paid += Decimal(str(source_filled))   # for price averaging   
-                sum_quantity += quantity_filled
-                str_status = 'Filled: {}'.format(source_filled) 
+                if market == 'USD-BTC': 
+                    source_filled = Decimal(str(Decimal(quantity_filled)/Decimal(price_unit)))   
+                    sum_paid += Decimal(str(source_filled))   # for price averaging   
+                    sum_quantity += quantity_filled
+                    str_status = 'Filled: {}'.format(source_filled) 
+                else: 
+                    source_filled = Decimal(str(Decimal(quantity_filled)*Decimal(price_unit)))  
+                    sum_paid += Decimal(str(source_filled))   # for price averaging   
+                    sum_quantity += quantity_filled
+                    str_status = 'Filled: {}'.format(source_filled) 
             else: 
                 source_filled = Decimal(str(price_unit * quantity_filled))
                 sum_paid += Decimal(str(source_filled))   
@@ -652,7 +661,7 @@ while buy_flag and approved_flag:
         ratio = Decimal(source_filled/source_start)
         ratio = ratio.quantize(Decimal('1.01'))
 
-        if (ratio < 0.99 or ratio == 0) and (approved_flag):           
+        if (ratio < 0.96 or ratio == 0) and (approved_flag):           
             lprint(['Ratio (0 is not started):', ratio])  # DEBUG  
             # If we are using market price (smartbuy)
             if fixed_price_flag != True:      
@@ -678,10 +687,16 @@ while buy_flag and approved_flag:
                 quantity = round(Decimal(str(source_position))/Decimal(str(buy_rate)), 6)                
  
                 if exchange == 'bitmex': # need to do this in contracts because the api returns contracts and not xbt filled           
-                    quantity = round(Decimal(str(source_position)), 6)
-                    buy_rate = round(buy_rate, 0) 
-                    contracts = round(quantity * buy_rate)   # margin is already accounted for in the main code     
-                    # print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
+                    if market == 'USD-BTC': 
+                        quantity = round(Decimal(str(source_position)), 6)
+                        buy_rate = round(buy_rate, 0) 
+                        contracts = round(quantity * buy_rate)   # margin is already accounted for in the main code     
+                        # print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
+                    else: # All alts are traded vs btc 
+                        quantity = round(Decimal(str(source_position)), 6)
+                        buy_rate =  0.0002  #round(buy_rate, 20) #AFTER TEST - UNCOMMENT
+                        contracts = round(quantity / buy_rate)   # margin is already accounted for in the main code     
+                        #print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
     
                 str_status = 'Quantity to buy {}'.format(quantity)  
                 lprint([str_status])    
@@ -786,7 +801,10 @@ print "Average price paid", round(sum_paid / sum_quantity, 8)
 if sum_quantity > 0: 
     if (wf_run_mode != 's') and (wf_run_mode != 'sns'):
         if exchange == 'bitmex': 
-            avg_price = round(Decimal(sum_quantity) / Decimal(str(sum_paid)), 8)    # cause we are buying contracts there  
+            if market == 'USD-BTC': 
+                avg_price = round(Decimal(sum_quantity) / Decimal(str(sum_paid)), 8)    # cause we are buying contracts there  
+            else: 
+                avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)    # cause we are buying contracts there  
         else: 
             avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)
         lprint(['Average price paid:', avg_price])    
@@ -870,10 +888,10 @@ if wf_id is not None:
         sql_string = "DELETE FROM workflow WHERE wf_id = {}".format(wf_id)
         rows = query(sql_string)
         
-        print '>>> Start a profit task: {} {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
+        print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_trade + '-' + wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
 
         # Launch in the same window 
-        python_call = 'python robot.py ' + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade, wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) 
+        python_call = 'python robot.py ' + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade + '-' + wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) 
         p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
         while True:
             out = p.stderr.read(1)
