@@ -2,7 +2,7 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex (bitmex is supported for xbt/usd pairs only). 
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
 
 Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
 
