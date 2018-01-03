@@ -47,15 +47,15 @@ def telegram_buy(wf_id = None):
     global platform_run, cmd_init_buy, chat
     print cmd_init_buy 
     
-    reply_string = 'Specify the parameters (e.g. "4h btrx usdt-btc 7957") \nmode exchange basic_curr altcoin [total_in_basic_curr] [price] [time limit for the price in minutes] \n\n'\
-    '>>Example: reg btrx BTC QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes,'\
-    'then switches to market prices \n\nModes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
-    'options with -s mean simulation mode \n'\
-    '4h buys based on 4h price action \n'\
-    'now buys immediately in real mode (or in simulation if there is simulation workflow) \n\n'\
-    'Exchanges: btrx, bina (bittrex, binance)'
-    
+    reply_string = 'Specify the parameters: mode exchange source_currency-buy_currency [total_in_source currency] [price] [time limit for the price in minutes].'\
+    '\nExchanges: btrx / bina / bmex (abbreviations for bittrex, binance, bitmex). Some examples:'
     chat.send(reply_string)
+    chat.send('reg bmex usd-btc')
+    chat.send('now bmex XRPH18 -0.1')
+    chat.send('brk btrx btc-powr 0.5 0.000095')
+    reply_string = 'Modes: reg/brk/now/reg-s/brk, add -s (reg-s) for simulation' 
+    chat.send(reply_string) 
+
     # Wait for a response
     msg_text = chat.get_response()
 
@@ -106,14 +106,22 @@ def telegram_buy(wf_id = None):
         # print "CMD: " + cmd_str # DEBUG
         os.system(cmd_str)
         chat.send('Buy task requested')
-        print '>>> Started a new buy job: {} {} {} {} {}'.format(buy_market, buy_total, buy_price, buy_time_limit)
+        #print '>>> Started a new buy job: {} {} {} {} {}'.format(buy_market, buy_total, buy_price, buy_time_limit)
+        print ">>> Started a new buy job: ", cmd_str    #DEBUG
     except: 
         chat.send('Not all the mandatory parameters are specified')    
                 
 def telegram_sell(wf_id = None): 
     global platform_run, cmd_init, chat
 
-    chat.send('Specify the parameters: simulation (s/r/sns/rns/rnts) exchange basic_curr-altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion] \nExample: s btrx BTC-LTC 0.0017 0.0021 0.0019 100')
+    reply_string = 'Specify the parameters: mode exchange basic_currency-traded_currency entry_price take_profit_price stop_loss_price [limit_of_amount_to_sell] [sell_portion]'\
+    '\nExchanges: btrx / bina / bmex (abbreviations for bittrex, binance, bitmex). Some examples:'
+    chat.send(reply_string)
+    chat.send('r bina btc-ltc 0.015 0.019 0.013 22')
+    chat.send('r bmex usd-btc 15000 16700 14000')
+    chat.send('brk btrx btc-powr 0.5 0.000095')
+    chat.send('Modes: s/r/sns/rns/rnts') 
+    
     # Wait for a response
     msg_text = chat.get_response()
 
@@ -217,7 +225,16 @@ while True:
             "Check balances: 'balance' \nSell now: 'sellnow' \nSmart buy: 'buy' \n" + \
             "Cancel buy: 'stopbuy' \nStop monitoring: 'stop listener' "
             chat.send(msg)
-        
+            msg = 'Buy modes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
+            'options with -s mean simulation mode \n'\
+            '4h buys based on 4h price action \n'\
+            'now buys immediately in real mode (or in simulation if there is simulation workflow) \n\n' 
+            chat.send(msg)
+            msg = 'Job (task) modes: s/r/sns/rns/rnts \ns - simulation with stops \nr - real mode with stops and take profit \n'\
+            'sns - simulation without stops \nrns - real mode with no stops (careful!) \n'\
+            'rnts - real mode without trailing stops \n' 
+            chat.send(msg)
+            
         ###### Terminating
         elif msg_text.find('stoplistener') >= 0: 
             chat.send('Stopped message monitoring')
@@ -233,7 +250,7 @@ while True:
             reply_string = '' 
             # Info from the DB - profit jobs
             # DB: id, market, tp, sl, simulation, mooning, selling, price_curr, percent_of, abort_flag
-            reply_string_profit = '>> SELL\n' 
+            reply_string_profit = '>> JOBS\n' 
             
             sql_string = "SELECT * FROM jobs"
             rows = query(sql_string)
