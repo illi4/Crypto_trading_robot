@@ -2,7 +2,7 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiousity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
 
 Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
 
@@ -46,7 +46,7 @@ I was too busy writing the code and did not document what logic had been impleme
 - Pre-profit and post-profit buybacks after exiting the positions 
 - Writing results (gains and losses) in a summary xls file 
 
-Ideally, you should run price_logger in athe non-stop mode so that you collect historical data which is then used in time analysis. Also, you should run daemon.py which will monitor requests sent through a Telegram chat. 
+Ideally, you should run price_logger non-stop so that you collect historical data which is then used in time analysis. Also, you should run daemon.py which will monitor requests sent through a Telegram chat. 
 
 ## How to set things up 
 
@@ -71,9 +71,11 @@ Currently, everyone needs to set their own environment which includes registerin
 
 ### Setting an environment 
 
-I would recommend setting up a virtual machine or using a cloud VM so that popping screens do not disctract you at your usual working environment. You would need to launch daemon.py (for processing your telegram messages) and price_logger.py (for price updates feeding to tdlib). Please check daemon.py code for available commands and modes. Eventually, you would have an environment like this:  
+I would recommend setting up a virtual machine or using a cloud VM so that popping screens do not distract you at your usual working environment. You would need to launch daemon.py (for processing your telegram messages) and price_logger.py (for price updates feeding to tdlib). Please check daemon.py code for available commands and modes. Eventually, you would have an environment like this:  
 
 ![screen_example](images/screen.png?raw=true "Screen")
+
+## Using the scripts 
 
 ### Some examples of how to use all this 
 
@@ -95,6 +97,35 @@ Similarly, the task will be launched in simulation.
 
 Note that your stop loss will be dynamically reconfigured if you are collecting price data with the price_logger script. 
 
+**Additional examples of supported Telegram commands** :
+
+Open long contracts on bitmex for XBT (BTC) with the total cost of 0.3 BTC (hereinafter, x times the configured margin) with the regular 5-minute candles based confirmation: 
+> /buy 
+> reg bmex usd-btc 0.3
+
+Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.1 BTC immediately: 
+> /buy 
+> now bmex XRPH18 -0.1 
+
+Buy POWR tokens on bittrex on the breakout of 0.000095 for 0.5 BTC: 
+> /buy 
+> brk btrx btc-powr 0.5 0.000095
+
+For the whole balance of 25 LTC on the binance exchange, start a task with the entry price of 0.015, take profit price of 0.019, and stop loss level of 0.013. 
+> /new
+> r bina btc-ltc 0.015 0.019 0.013
+
+Open long contracts for BTC on bitmex on the confirmation of bullishness on 4-hour candles for the total of 0.5 BTC, with the take profit level of 18850 and the stop loss of 15400 
+> /workflow
+> r bmex 18850 15400
+> 4h bmex usd-btc 0.5
+
+### Using price_logger to mitigate the risk of USDT crashing hard 
+
+I genuinely believe that USDT (USD Tether) is a ticking time bomb which will burst one day. However, I had been using it for a while due to its convenience. In order to protect myself from a sudden collapse of this token, I added a piece of code in the price_logger script which monitors the usdt-usd exchange rate (on Kraken) and buys BTC for all the available USDT when USDT collapses (USDT-USD ratio 0.93 for more than 15 minutes which did not happen in the past few years). 
+
+I consider Tether a great instrument and a perfect tool for the provision of better liquidity (especially for alts) - however, I am really  concerned with complete disregard of the community concerns by the Tether company and by Bitfinex. More and more tokens are being 'printed' while the community has to keep guessing what is going on. These companies should come up with a public statement and with transparent audits available to public. 
+
 ### Editing the workflow database
 
 This repo includes a dummy database with no records which is a sqlite database (more than enough for the purpose of personal use). You can use any software working with sqlite to edit the tables in case anything goes wrong. 
@@ -107,13 +138,13 @@ Please use the scripts at your own risk. I am not responsible for your API keys 
 
 As there are many other exchanges out there except for included ones, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py (cobinhood will be an immediate priority). Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
 
-Moveover, the code can definitely be cleaned and improved further. E.g. some functions can be separated in modules, and settings can be externalised in a separate file rather than hardcoded. 
+Moreover, the code can definitely be cleaned and improved further. E.g. some functions can be separated in modules, and settings can be externalised in a separate file rather than hardcoded. 
 
 Please feel free to contribute on github directly or contact me first via Telegram (illi4).
 
 ## Donations
 
 Donations would be much appreciated so that I can spend more time on coding and research. 
-- BTC: 3PMXTE771Qj3VN5XxVQrvaJ1u1pC5YV5Ta
+- BTC: 3B9PYDa5PFLDo4YqVi6XgVGf9nMfpJhjC9
 - ETH: 0xb52770c0F71BF80aa97CCd79fe93f3F6520787Dc
 - LTC: M8TUzJMwCsCey4DvGEDHVW4QrMT2hq7zq7
