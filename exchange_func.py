@@ -297,11 +297,11 @@ def bitmex_openpositions(market):
                 temp_dict["type"]  = 'long'
             else: 
                 temp_dict["type"]  = 'short'
-            temp_dict['xbt'] = abs(position['homeNotional']) # using abs here because we will be working on both longs and shorts 
+            temp_dict['contracts_no'] = abs(position['homeNotional']) # using abs here because we will be working on both longs and shorts  #CHANGE
             temp_dict['contracts'] = abs(position['simpleCost'])
             temp_dict['entryprice'] = position['avgEntryPrice']
         result.append(temp_dict)
-    return result    
+    return result     
     
 def bitmex_closepositions(positions, market, price): 
     contracts_total = 0 

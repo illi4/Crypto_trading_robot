@@ -644,9 +644,9 @@ def sell_orders_info():
         else:
             # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
             alt_sold_total = limit_sell_amount
+            price_exit = get_last_price(market)
             if exchange == 'bitmex': 
-                price_exit = get_last_price(market)
-            main_curr_from_sell = contracts_start/price_exit   
+                main_curr_from_sell = contracts_start/price_exit   
     except: 
         err_msg = traceback.format_exc()
         comm_string = 'Could not het sell orders history from {} on {}. Reason: {}. Check the results'.format(market, exchange, err_msg)
@@ -723,7 +723,7 @@ def stop_reconfigure(mode = None):
    
     # Stop level depending on the strategy 
     if strategy == 'btc': 
-        down_contingency = 0.005    # 0.5% lower than the previous bullish 4H candle   
+        down_contingency = 0.0077    # 0.77% lower than the previous bullish 4H candle   
     else: 
         down_contingency = 0.01     # 1% lower than the previous bullish 4H candle   
     
@@ -1339,7 +1339,9 @@ if simulation != True:
     if exchange == 'bitmex': 
         bitmex_no_positions = True 
         positions = getpositions(exchange, market) 
+        #print "getpositions({}, {})".format(exchange, market)   #HERE 
         for position in positions: 
+            #print position  #HERE
             if position != {}: 
                 bitmex_no_positions = False 
                 if position['type'] == 'short':     # enabling short flag if the positions are in short 
