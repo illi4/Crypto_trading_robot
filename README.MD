@@ -101,23 +101,29 @@ Note that your stop loss will be dynamically reconfigured if you are collecting 
 
 Open long contracts on bitmex for XBT (BTC) with the total cost of 0.3 BTC (hereinafter, x times the configured margin) with the regular 5-minute candles based confirmation: 
 > /buy 
+
 > reg bmex usd-btc 0.3
 
 Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.1 BTC immediately: 
 > /buy 
+
 > now bmex XRPH18 -0.1 
 
 Buy POWR tokens on bittrex on the breakout of 0.000095 for 0.5 BTC: 
 > /buy 
+
 > brk btrx btc-powr 0.5 0.000095
 
 For the whole balance of 25 LTC on the binance exchange, start a task with the entry price of 0.015, take profit price of 0.019, and stop loss level of 0.013. 
 > /new
+
 > r bina btc-ltc 0.015 0.019 0.013
 
 Open long contracts for BTC on bitmex on the confirmation of bullishness on 4-hour candles for the total of 0.5 BTC, with the take profit level of 18850 and the stop loss of 15400 
 > /workflow
+
 > r bmex 18850 15400
+
 > 4h bmex usd-btc 0.5
 
 ### Using price_logger to mitigate the risk of USDT crashing hard 
