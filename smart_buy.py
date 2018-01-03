@@ -694,7 +694,7 @@ while buy_flag and approved_flag:
                         # print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
                     else: # All alts are traded vs btc 
                         quantity = round(Decimal(str(source_position)), 6)
-                        buy_rate =  0.0002  #round(buy_rate, 20) #AFTER TEST - UNCOMMENT
+                        buy_rate =  round(buy_rate, 20)    
                         contracts = round(quantity / buy_rate)   # margin is already accounted for in the main code     
                         #print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
     
@@ -888,10 +888,10 @@ if wf_id is not None:
         sql_string = "DELETE FROM workflow WHERE wf_id = {}".format(wf_id)
         rows = query(sql_string)
         
-        print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_trade + '-' + wf_info_curr, wf_info_price, wf_info_tp, wf_info_sl)
+        print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_market, wf_info_price, wf_info_tp, wf_info_sl)
 
         # Launch in the same window 
-        python_call = 'python robot.py ' + ' '.join([wf_stop_mode, exchange_abbr, wf_info_trade + '-' + wf_info_curr, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) 
+        python_call = 'python robot.py ' + ' '.join([wf_stop_mode, exchange_abbr, wf_info_market, str(wf_info_price), str(wf_info_tp), str(wf_info_sl)]) 
         p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
         while True:
             out = p.stderr.read(1)

@@ -41,9 +41,9 @@ dir_to = '/home/illi4/Dropbox/Exchange/price_log'
 markets_list = [
     #['BTC-CTR' , 'BINA'], 
     #['BTC-MUSIC' , 'BTRX'], 
-    ['USDT-USD', 'KRKN'], 
-    ['USDT-BTC', 'BTRX'], 
-    ['USDT-BTC' , 'BINA'], 
+    #['USDT-USD', 'KRKN'], 
+    #['USDT-BTC', 'BTRX'], 
+    #['USDT-BTC' , 'BINA'], 
     ['BTC-LTC' , 'BTRX'], 
     ['BTC-DASH' , 'BTRX'], 
     ['BTC-MUSIC' , 'BTRX'], 
@@ -52,7 +52,7 @@ markets_list = [
     ['BTC-ETH' , 'BTRX'], 
     ['BTC-POWR' , 'BTRX'],
     ['XBT-USD' , 'BMEX'], 
-    ['USD-BTC' , 'BITS'],       
+    #['USD-BTC' , 'BITS'],       
     ['XRPH18', 'BMEX']
 ]
 
@@ -161,6 +161,8 @@ while True:
                     chat.send("Cannot get the price of " + elem[0] + " for 10 minutes and 5 times in a row")
                     failed_attempts_dict[elem[0]] = 0 
                     time_failed[elem[0]] = time.time()
+        # Sleep for just a bit 
+        time.sleep(0.2) 
     # Timer 
     time_now = time.time() 
     time_diff = (math.ceil(time_now - start_time)) 
