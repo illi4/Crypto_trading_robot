@@ -648,13 +648,24 @@ while buy_flag and approved_flag:
                     lprint(['Updating the 4H candles price data'])    
                     time_hour = time_hour_update
                     bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)   
-                check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
-                lprint([ exchange, ": TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
-                lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
-                if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
-                    fixed_price_starter = True 
-                else: 
-                    lprint([ exchange,  ": Condition not met"])
+                
+                # Different conditions depending on long / short: 
+                if short_flag != True: # LONGS  
+                    check_value = bars['high'].iloc[-1] * (1 + diff_threshold)
+                    lprint([ exchange, ": TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
+                    lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
+                    if (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
+                        fixed_price_starter = True 
+                    else: 
+                        lprint([ exchange,  ": condition for buying long not met"])
+                else: #SHORTS 
+                    check_value = bars['low'].iloc[-1] * (1 - diff_threshold)
+                    lprint([ exchange, ": TD setup:", bars['td_setup'].iloc[-1], "TD direction:", bars['td_direction'].iloc[-1] ])       
+                    lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
+                    if (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value):  
+                        fixed_price_starter = True 
+                    else: 
+                        lprint([ exchange,  ": condition for buying short not met"])
             
         # If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
