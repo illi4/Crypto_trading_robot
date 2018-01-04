@@ -197,7 +197,7 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 4.5    # size of margin on bitmex 
+bitmex_margin = 3.5    # size of margin on bitmex 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable    
@@ -446,7 +446,7 @@ def check_bb_flag():
 
 ##################### Looking for rebuy points (buyback), based on 4H candles price action or simpler price action depending on data availability
 def buy_back(price_base): 
-    global bb_id, market, exchange_abbr, exchange 
+    global bb_id, market, exchange_abbr, exchange, sleep_timer
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     global short_flag, td_period
     
@@ -580,6 +580,9 @@ def buy_back(price_base):
                 direction = 'down'
                 flag_reb_c = False 
                 lprint(["TD buyback initiated on the short side"])
+            
+            # Sleeping 
+            time.sleep(sleep_timer) 
             
     # Finishing up 
     return bback_result, direction
