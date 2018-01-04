@@ -25,10 +25,10 @@ The following scripts are used:
 - Exchange_func.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts. **Note** that your API keys for exchanges should be specified there. 
 - Loglib.py is a library with a few logging functions 
 - Platformlib.py is a library to detect your OS and return proper folders to launch additional scripts
-- Price_logger.py gets price ticker for various exchanges from coinigy api and saves data in price_log folder. _Note that you will need to configure the list of tokens and exchanges for which you would like to collect price data_. 
+- Price_logger.py gets price ticker for various exchanges from coinigy api and saves data in price_log folder. **Note** that you will need to configure the list of tokens and exchanges for which you would like to collect price data. 
 - Sqltools.py included a few functions to work with workflow.db sqlite database
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators
-- Telegramlib.py works with telegram messages (used mostly in daemon). Note that you would need to register a telegram bot and configure your tokens / chat id in this script. 
+- Telegramlib.py works with telegram messages (used mostly in daemon). **Note** that you would need to register a telegram bot and configure your tokens / chat id in this script. 
 - **Robot.py** is a core script which performs the monitoring of position prices, sells or buys back, executes stop orders 
 - **Smart_buy.py** is a core script used to buy positions immediately or in specific conditions 
 
@@ -52,7 +52,7 @@ Ideally, you should run price_logger non-stop so that you collect historical dat
 
 After registering your API keys on exchanges, you would need to specify them in exchange_func.py. Also, if you want to use Telegram functionality, create a bot (via botfather), and configure your tokens and chat id in the telegramlib.py. 
 
-For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. Grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
+For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. I really recommend using Coinigy because otherwise you could be blocked from an exchange api even if you run a few robots without price logging. Generally, grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
 
 ### Setting a telegram bot 
 
