@@ -44,6 +44,10 @@ import platformlib as platform                                    # detecting th
 # Universal functions for all exchanges 
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions
 
+# Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
+from coinigylib import coinigy 
+coinigy = coinigy()
+
 ################################ Config - part I ############################################
 
 ### TD analysis library
@@ -207,7 +211,8 @@ try:
 
     ### Greetings (for logs readability) 
     lprint(["###################### SMART_BUY ###########################"])
-        
+
+    
 except:
     print 'Specify the parameters: mode exchange basic_curr-altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC-QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
     exit(0)
@@ -277,7 +282,8 @@ def get_last_price(market):
     failed_attempts = 0
     for i in range(1, steps_ticker + 1):
         try:
-            ticker_upd = getticker(exchange, market) 
+            #ticker_upd = getticker(exchange, market) 
+            ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd += ticker_upd
         except:
             #print "Issues with URL (!) for market", market
@@ -300,7 +306,8 @@ def get_last_price(market):
             time.sleep(300) # sleeping for 5 minutes and checking again
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                ticker_upd = getticker(exchange, market)  
+                #ticker_upd = getticker(exchange, market)  
+                ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
@@ -322,7 +329,8 @@ def candle_extreme(type):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
         try:
-            ticker_upd = getticker(exchange, market)
+            #ticker_upd = getticker(exchange, market)
+            ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd = ticker_upd
             if type == 'L': 
                 if (price_extreme == 0) or (price_upd < price_extreme): 
@@ -350,7 +358,8 @@ def candle_extreme(type):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                ticker_upd = getticker(exchange, market)  
+                #ticker_upd = getticker(exchange, market)  
+                ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
@@ -423,13 +432,15 @@ def ensure_balance():
 ###################################################################################
 ### 1. Checking availability, balance 
 try: 
-    ticker_upd = getticker(exchange, market)
+    #ticker_upd = getticker(exchange, market)
+    ticker_upd = coinigy.price(exchange_abbr, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
         send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         while ticker_upd is None: 
             time.sleep(300) # sleeping for 5 minutes and checking again
-            ticker_upd = getticker(exchange, market)  
+            #ticker_upd = getticker(exchange, market)  
+            ticker_upd = coinigy.price(exchange_abbr, market)
     
     if ticker_upd == 'INVALID_MARKET': 
         lprint(['Error: Invalid market'])    

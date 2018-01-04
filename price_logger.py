@@ -44,16 +44,23 @@ markets_list = [
     #['USDT-USD', 'KRKN'], 
     #['USDT-BTC', 'BTRX'], 
     #['USDT-BTC' , 'BINA'], 
-    ['BTC-LTC' , 'BTRX'], 
-    ['BTC-DASH' , 'BTRX'], 
-    ['BTC-MUSIC' , 'BTRX'], 
-    ['BTC-XMR' , 'BTRX'], 
-    ['BTC-NEO' , 'BTRX'], 
-    ['BTC-ETH' , 'BTRX'], 
-    ['BTC-POWR' , 'BTRX'],
+    #['BTC-LTC' , 'BTRX'], 
+    #['BTC-DASH' , 'BTRX'], 
+    #['BTC-MUSIC' , 'BTRX'], 
+    #['BTC-XMR' , 'BTRX'], 
+    #['BTC-NEO' , 'BTRX'], 
+    #['BTC-ETH' , 'BTRX'], 
+    #['BTC-POWR' , 'BTRX'],
+    #['USD-BTC' , 'BITS'],     
     ['XBT-USD' , 'BMEX'], 
-    #['USD-BTC' , 'BITS'],       
-    ['XRPH18', 'BMEX']
+    ['XRPH18', 'BMEX'], 
+    ['ETHH18', 'BMEX'], 
+    ['BCHF18', 'BMEX'], 
+    ['DASHH18', 'BMEX'], 
+    ['ETC7D', 'BMEX'], 
+    ['LTCH18', 'BMEX'], 
+    ['XMRH18', 'BMEX'], 
+    ['ZECH18', 'BMEX']    
 ]
 
 ################################ Code ############################################
@@ -104,7 +111,7 @@ while True:
         name_id = elem[0] + '_' + elem[1].lower()
         elem_ticker = elem[0].replace('-', '/') 
         try: 
-            price = coinigy.price(elem_ticker, elem[1])
+            price = coinigy.price(elem[1], elem_ticker)
         except: 
             price = None 
         timestamp = time.time()

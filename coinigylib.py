@@ -3,6 +3,9 @@ import json
 import urllib2
 import time
 
+# Import exchanges libraries in case coinigy api fails to get a price 
+from exchange_func import getticker
+
 # Coinigy functions 
 class coinigy(object):
     def __init__(self):
@@ -10,11 +13,17 @@ class coinigy(object):
         self.key = 'key'    # put your key here 
         self.secret = 'secret'  # put your secret key here 
         self.content = "application/json"
-
-    def price(self, ticker, exchange): 
+        
+    def price(self, exchange, ticker): 
         count = 0 
         json_resp = None 
+        exchange = exchange.upper()
         
+        # For bitmex, USD-BTC ticker is available through XBTUSD product 
+        if (ticker == 'BTC-USD' or ticker == 'USD-BTC') and exchange == 'BMEX':
+            ticker = 'XBTUSD'  
+        
+        # Checking the price 
         while count < 3: 
             try:
                 values =  {
@@ -28,16 +37,43 @@ class coinigy(object):
 
                 response = urllib2.urlopen(req, json.dumps(values)).read()
                 json_resp = json.loads(response)
+                #print json_resp
                 count = 3
             except:
                 count+= 1
-                print count 
+                #print json_resp
+                #print count 
                 time.sleep(0.5)
                 
         if json_resp is not None: 
-            return json_resp['data'][0]['last_trade']
-        else: 
-            return None 
+            try: 
+                return float(json_resp['data'][0]['last_trade'])
+            except: 
+                json_resp = None 
+        
+        if json_resp is None: 
+            # Trying directly via an exchange if coinigy is not responding 
+            if exchange == 'BTRX': 
+                exchange = 'bittrex'
+            elif exchange == 'BINA':      
+                exchange = 'binance'
+            elif exchange == 'BMEX':   
+                exchange = 'bitmex'
+            # conversions 
+            ticker = ticker.replace('/', '-')
+            if ticker == 'XBT-USD': 
+                ticker = 'USD-BTC'
+            print '>> Trying exchange directly for', ticker, exchange
+            count = 0
+            price_ticker = None 
+            while count < 3: 
+                try:
+                    price_ticker = getticker(exchange, ticker) 
+                    count = 3
+                except:
+                    count += 1
+                    time.sleep(0.5)
+            return float(price_ticker)
             
     def balances(self, filter_name = None): 
         exchanges = {}
@@ -117,14 +153,13 @@ class coinigy(object):
             str_balance += '\n'  
         
         try:
-            # For conversion of balances to AUD 
             response = urllib2.urlopen('http://api.fixer.io/latest?base=USD&symbols=AUD') 
             usd_aud = json.load(response)['rates']['AUD']   
         except: 
             usd_aud = 1.254      
         
         if usdte == 0: 
-            usdte = self.price('USDT/BTC', 'BTRX')
+            usdte = self.price('BTRX', 'USDT/BTC')
             
         balance_usdt_val = balance_total_btc_val * float(usdte)
         balance_aud_val = round(usd_aud*balance_usdt_val, 1) 

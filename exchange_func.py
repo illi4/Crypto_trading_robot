@@ -322,6 +322,7 @@ def bitmex_get_sell_ordhist(market):  # only need sell (short) orders (IDs)
     market = market_std(market)    
     listoforders = [] 
     bitmex_orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {})
+
     for order in bitmex_orders:  
         temp_dict = {}
         temp_dict['OrderUuid'] = order["orderID"]

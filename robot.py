@@ -48,6 +48,10 @@ import platformlib as platform  # detecting the OS and assigning proper folders
 # Universal functions for all exchanges              
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions
 
+# Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
+from coinigylib import coinigy 
+coinigy = coinigy()
+
 ################################ Config - part I ############################################
 
 ### TD analysis library
@@ -140,7 +144,7 @@ try:
 except:
     no_input = True 
 
-# Terminate if there is no proper input   #CHANGE - DESCR
+# Terminate if there is no proper input    
 if no_input:
     print '----------------------------------------------------------------------------------------------\n' + \
     'Run parameters not specified. Restart the script using:\n' + \
@@ -280,17 +284,20 @@ def process_stat(status):
 
 ##################### Getting several last prices in short intervals instead of just one 
 def get_last_price(market): 
+    global exchange, exchange_abbr, coinigy
+    
     ticker_upd = {}
     price_upd = 0
     failed_attempts = 0
     for i in range(1, steps_ticker + 1):
         try:
-            ticker_upd = getticker(exchange, market) 
+            #ticker_upd = getticker(exchange, market) 
+            ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd += ticker_upd
         except:
             # print "Issues with URL (!) for market", market
             failed_attempts += 1
-        time.sleep(sleep_ticker)
+            #time.sleep(sleep_ticker)
         
     # Logging failed attempts number
     if failed_attempts > 0: 
@@ -307,7 +314,8 @@ def get_last_price(market):
             time.sleep(300) # sleeping for 5 minutes and checking again
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                ticker_upd = getticker(exchange, market) 
+                #ticker_upd = getticker(exchange, market) 
+                ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
@@ -320,7 +328,8 @@ def get_last_price(market):
 ##################### Extreme in time series; returns value with the lowest or the highest ticker price among N-min intervals (candles) 
 # type should be 'H' or 'L' (highest ore lowest in the series) 
 def candle_extreme(type): 
-    global exchange, market, candle_steps, candle_sleep
+    global exchange, exchange_abbr, market, candle_steps, candle_sleep
+    global coinigy 
     ticker_upd = {}
     price_upd = 0
     price_extreme = 0
@@ -328,7 +337,8 @@ def candle_extreme(type):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec); 80 x 3 for 4 minutes 
         try:
-            ticker_upd = getticker(exchange, market) 
+            #ticker_upd = getticker(exchange, market) 
+            ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd = ticker_upd
             if type == 'L': 
                 if (price_extreme == 0) or (price_upd < price_extreme): 
@@ -357,7 +367,8 @@ def candle_extreme(type):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                ticker_upd = getticker(exchange, market) 
+                #ticker_upd = getticker(exchange, market) 
+                ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
@@ -368,6 +379,8 @@ def candle_extreme(type):
 ##################### Candle analysis; returns high, low, and whether the price crossed a value - among N-min intervals (candles) 
 def candle_analysis(cross_target): 
     global market, candle_steps, candle_sleep
+    global exchange, exchange_abbr, coinigy 
+    
     ticker_upd = {}
     price_upd = 0
     price_h = 0
@@ -377,7 +390,8 @@ def candle_analysis(cross_target):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
         try:
-            ticker_upd = getticker(exchange, market) 
+            #ticker_upd = getticker(exchange, market) 
+            ticker_upd = coinigy.price(exchange_abbr, market) 
             price_upd = ticker_upd
             if (price_l == 0) or (price_upd < price_l): 
                 price_l = price_upd
@@ -406,7 +420,8 @@ def candle_analysis(cross_target):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                ticker_upd = getticker(exchange, market) 
+                #ticker_upd = getticker(exchange, market) 
+                ticker_upd = coinigy.price(exchange_abbr, market) 
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
@@ -636,10 +651,11 @@ def sell_orders_info():
                         lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
                     else: 
                         price_exit = bitmex_sell_avg
-                        if market == 'USD-BTC': 
-                            main_curr_from_sell = contracts_start/price_exit
-                        else: 
-                            main_curr_from_sell = contracts_start*price_exit
+                        if price_exit != 0: 
+                            if market == 'USD-BTC': 
+                                main_curr_from_sell = contracts_start/price_exit
+                            else: 
+                                main_curr_from_sell = contracts_start*price_exit
                 lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
         else:
             # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
@@ -1305,14 +1321,16 @@ time_hour = time.strftime("%H")     # For periodic updates of 4H candles and sto
   
 # 1. Checking market correctness and URL validity, as well as protecting from fat fingers
 try: 
-    ticker_upd = getticker(exchange, market) 
+    #ticker_upd = getticker(exchange, market) 
+    ticker_upd = coinigy.price(exchange_abbr, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
         send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         while ticker_upd is None: 
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             time.sleep(300) # sleeping for 5 minutes and checking again
-            ticker_upd = getticker(exchange, market) 
+            #ticker_upd = getticker(exchange, market) 
+            ticker_upd = coinigy.price(exchange_abbr, market)
         
     if ticker_upd == 'INVALID_MARKET': 
         lprint(['Error: Invalid market'])

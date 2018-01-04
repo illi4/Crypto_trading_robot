@@ -335,15 +335,29 @@ class bitmex (Exchange):
     def fetch_positions(self, symbol=None, since=None, limit=None, params={}):
         if not symbol:
             raise ExchangeError(self.id + ' fetchPositions requires a symbol param')
+        
         self.load_markets()
         market = self.market(symbol)
-        # Quick fix 
+        
+        # Tried to add this for proper filtering - but does not work this way 
+        # params = {'filter' : json.dumps({"symbol":market})}
+        positions_response = [] 
+        
         response = self.privateGetPosition(self.extend({
             'symbol': market['id'],
             'count': limit,
             'reverse': True,
         }, params))
-        return response  
+
+        # BTC USD fix     
+        if symbol == 'BTC/USD' or symbol == 'USD/BTC': 
+            symbol = 'XBTUSD'         
+        
+        for resp in response: 
+            if resp['symbol'] == symbol: 
+                positions_response.append(resp)
+                
+        return positions_response  
 
 
     ####################################################################
