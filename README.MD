@@ -54,6 +54,10 @@ After registering your API keys on exchanges, you would need to specify them in 
 
 For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. I really recommend using Coinigy because otherwise you could be blocked from an exchange api even if you run a few robots without price logging. Generally, grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
 
+A few other tips which are important: 
+- Make sure that you specify a personal chat id (not a group chat id) in the Telegramlib.py
+- Default terminal to launch the commands is gnome-terminal. If you do not have it - either install it or change the command in platformlib.py. 
+
 ### Setting a telegram bot 
 
 Currently, everyone needs to set their own environment which includes registering the telegram bot, setting its menu (if needed), and specifying tokens & chat id in the telegramlib.py. There are several comprehensive guides on the Internet related to this topic, including [the instructions from the telegram core](https://core.telegram.org/bots#botfather). When running, daemon.py supports the following commands sent in a Telegram chat (you can just copy and paste to botfather when configuring commands): 
