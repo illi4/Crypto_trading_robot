@@ -109,6 +109,11 @@ Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.1 BT
 
 > now bmex XRPH18 -0.1 
 
+Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.05 BTC on the time-based (default 4H) candles confirmation: 
+> /buy 
+
+> 4h bmex XRPH18 -0.05
+
 Buy POWR tokens on bittrex on the breakout of 0.000095 for 0.5 BTC: 
 > /buy 
 
