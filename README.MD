@@ -72,6 +72,9 @@ Currently, everyone needs to set their own environment which includes registerin
 - nlong - create a new record about a long-term holding without any buy/sell tasks
 - rmlong - delete records from longs table 
 - stoplistener - stop the monitoring bot 
+- help - get information on commands parameters and available commands 
+
+You can get clarification on the modes (r/s/rnts and so on) by sending the help command to a telegram bot. 
 
 ### Setting an environment 
 
