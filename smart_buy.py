@@ -784,7 +784,11 @@ while buy_flag and approved_flag:
             buy_flag = False 
             sleep_timer = 0 
         
-        time.sleep(sleep_timer)
+        # Sleeping depending on whether we have started buying or not 
+        if ratio == 0: 
+            time.sleep(30)
+        else: 
+            time.sleep(sleep_timer)
 
     except: 
         err_msg = traceback.format_exc()
