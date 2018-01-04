@@ -56,7 +56,7 @@ For price logging, you would need a [Coinigy](https://www.coinigy.com/) account 
 
 A few other tips which are important: 
 - Make sure that you specify a personal chat id (not a group chat id) in the Telegramlib.py
-- Default terminal to launch the commands is gnome-terminal with the profile name called Active. If you do not have it, either install it in your environment or change the commands in platformlib.py. Also make sure to remove the profile name or change it to available ones. I am using a separate profile which specifies that the window should be kept open after a program exits. See this [stackoverflow topic](https://stackoverflow.com/questions/4465930/prevent-gnome-terminal-from-exiting-after-execution) for details. 
+- Default terminal to launch the commands is gnome-terminal. If you do not have it, either install it in your environment or change the commands in platformlib.py. On my machine, I am also using a separate profile which specifies that the window should be kept open after a program exits so I see if anything goes wrong. See this [stackoverflow topic](https://stackoverflow.com/questions/4465930/prevent-gnome-terminal-from-exiting-after-execution) for details. 
 
 ### Setting a telegram bot 
 
