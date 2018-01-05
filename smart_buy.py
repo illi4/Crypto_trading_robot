@@ -88,7 +88,7 @@ chat = telegram()
 
 ### Default flag for shorting. The bot can be used to short on bitmex, not only go long 
 short_flag = False 
-bitmex_margin = 3.5    # size of margin on bitmex 
+bitmex_margin = 2.5    # size of margin on bitmex 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable  

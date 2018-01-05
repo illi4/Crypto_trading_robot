@@ -197,7 +197,7 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 3.5    # size of margin on bitmex 
+bitmex_margin = 2.5    # size of margin on bitmex 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable    
@@ -1686,10 +1686,14 @@ try:
     
     # If a buyback cancellation was requested 
     else: 
-        send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange)  
+        send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
+        # Delete buyback from the DB 
+        sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
+        rows = query(sql_string)
     
 except KeyboardInterrupt:
     print "Buyback cancelled or the task was finished"  
+     # Delete buyback from the DB 
     sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
     rows = query(sql_string)
     try: 
