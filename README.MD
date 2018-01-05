@@ -6,7 +6,8 @@ This robot was created to help me to exit positions (trailing stops) better, to 
 
 Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
 
-However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified length (default it 4H) and open / close long and short positions (shorts are supported on bitmex only). The image below illustrates the logic: 
+However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 1 day) and will open / close long and short positions (shorts are supported on bitmex only). 
+The image below illustrates the logic: 
 
 ![candles_logic](images/candles.png?raw=true "Candles_logic")
 
@@ -29,10 +30,12 @@ The following scripts are used:
 - Sqltools.py included a few functions to work with workflow.db sqlite database
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators
 - Telegramlib.py works with telegram messages (used mostly in daemon). **Note** that you would need to register a telegram bot and configure your tokens / chat id in this script. 
-- **Robot.py** is a core script which performs the monitoring of position prices, sells or buys back, executes stop orders 
-- **Smart_buy.py** is a core script used to buy positions immediately or in specific conditions 
+- **Robot.py** is a core script which performs the monitoring of position prices, sells or buys back, executes stop orders. 
+- **Smart_buy.py** is a core script used to buy positions immediately or in specific conditions.  
 
 Some of settings should be changed to suit your environment, including date and time (Sydney time is currently used, see loglib) and home directory on a *nix machine (see platformlib). Ideally, I need to separate all the settings in a separate file, but I did not really have time and motivation to do this. 
+
+Also, feel free to look at robot.py and smart_buy.py to code an alternative logic, change thresholds and price analysis periods. 
 
 ## Scripts logic and working scripts 
 
