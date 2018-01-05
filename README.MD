@@ -9,7 +9,7 @@ Note that this is not a fully automated bot which works automatically all the ti
 However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 1 day) and will open / close long and short positions (shorts are supported on bitmex only). 
 The image below illustrates the logic: 
 
-![candles_logic](images/candles.png?raw=true "Candles_logic")
+![candles_logic](images/candles_upd.png?raw=true "Candles_logic")
 
 ## Files 
 
