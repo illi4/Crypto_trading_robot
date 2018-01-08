@@ -2,7 +2,7 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves based on a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/). The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by the Wall Street. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
 
 Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
 
@@ -84,7 +84,7 @@ You can get clarification on the modes (r/s/rnts and so on) by sending the help 
 
 I would recommend setting up a virtual machine or using a cloud VM so that popping screens do not distract you at your usual working environment. You would need to launch daemon.py (for processing your telegram messages) and price_logger.py (for price updates feeding to tdlib). Please check daemon.py code for available commands and modes. Eventually, you would have an environment like this:  
 
-![screen_example](images/screen.png?raw=true "Screen")
+![screen_example](images/screen_upd.png?raw=true "Screen")
 
 ## Using the scripts 
 
