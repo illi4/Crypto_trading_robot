@@ -263,8 +263,15 @@ while True:
                     re_market = row[1]
                     re_tp = row[2]
                     re_sl = row[3]
+                    # Direction of the trade
+                    if float(re_tp) > float(re_sl): 
+                        re_direction = '(L)' 
+                    else: 
+                        re_direction = '(S)' 
+                        
                     re_simulation = row[4]
                     stop_loss = row[10]
+                    
                     if bool(re_simulation) == True: 
                         if bool(stop_loss) == True: 
                             re_simulation = '(Simulation, SL)'
@@ -275,22 +282,23 @@ while True:
                             re_simulation = '(Real, SL)'
                         else: 
                             re_simulation = '(Real, no SL)'
+                            
                     re_mooning = row[5]
                     if bool(re_mooning) == 1:
                         descr_price = '% higher than original TP'
                     else:
                         descr_price = '% of EP'
+                        
                     re_selling = row[6]
                     re_price_curr = row[7]
                     re_percent_of = row[8]
                     re_exchange = row[15]
                     
                     if bool(stop_loss) == True: 
-                        reply_string_profit += "Running ({}) {}: {} {} {} \nTP: {} | SL: {}\nCurrent price: {}\n\n".format(re_exchange, re_market, re_percent_of, descr_price, re_simulation, re_tp, re_sl, re_price_curr)
+                        reply_string_profit += "Running ({}) {}: {} {} {} {} \nTP: {} | SL: {}\nCurrent price: {}\n\n".format(re_exchange, re_market, re_percent_of, descr_price, re_simulation, re_direction, re_tp, re_sl, re_price_curr)
                     else: 
                         reply_string_profit += "Running ({}) {}: {} {} {} \nTP: {} \nCurrent price: {}\n\n".format(re_exchange, re_market, re_percent_of, descr_price, re_simulation, re_tp, re_price_curr)
-                    
-                    #reply_string_profit += "Running {}: {} {} {} \nTP: {} | SL: {}\nCurrent price: {}\n\n".format(re_market, re_percent_of, descr_price, re_simulation, re_tp, re_sl, re_price_curr)
+                 
                 
             # Info from the DB - buy jobs
             # DB: id, market, price_fixed, price, abort_flag
@@ -308,13 +316,17 @@ while True:
                     re_b_fixed = row[2]
                     re_b_price = row[3]
                     re_b_position = row[5]
+                    if float(re_b_position) > 0: 
+                        re_b_direction = '(L)' 
+                    else: 
+                        re_b_direction = '(S)' 
                     re_b_mode = row[6]
                     re_b_exchange = row[7]
                     if re_b_fixed == 0: 
                         price_descr = 'Floating'
                     else: 
                         price_descr = 'Fixed'
-                    reply_string_buy += "Buying ({}) {}. {} price {}, mode {}. Total of: {}\n".format(re_b_exchange, re_b_market, price_descr, re_b_price, re_b_mode, re_b_position)
+                    reply_string_buy += "Buying ({}) {} {}. {} price {}, mode {}. Total of: {}\n".format(re_b_exchange, re_b_direction, re_b_market, price_descr, re_b_price, re_b_mode, re_b_position)
             reply_string_buy += '\n'
 
             # Info from the DB - buybacks
@@ -337,7 +349,7 @@ while True:
             
             # Info from the DB - longs
             # DB: id, market, EP, quantity
-            reply_string_long = '>> LONG\n' 
+            reply_string_long = '>> HOLD\n' 
             
             sql_string = "SELECT * FROM longs"
             rows = query(sql_string)
