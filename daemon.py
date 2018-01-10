@@ -50,10 +50,10 @@ def telegram_buy(wf_id = None):
     reply_string = 'Specify the parameters: mode exchange source_currency-buy_currency [total_in_source currency] [price] [time limit for the price in minutes].'\
     '\nExchanges: btrx / bina / bmex (abbreviations for bittrex, binance, bitmex). Some examples:'
     chat.send(reply_string)
-    chat.send('reg bmex usd-btc')
+    chat.send('4h bmex usd-btc 0.15')
     chat.send('now bmex XRPH18 -0.1')
     chat.send('brk btrx btc-powr 0.5 0.000095')
-    reply_string = 'Modes: reg/brk/now/reg-s/brk, add -s (reg-s) for simulation' 
+    reply_string = 'Modes: reg/brk/now/4h, add -s (e.g. reg-s) for simulation' 
     chat.send(reply_string) 
 
     # Wait for a response
