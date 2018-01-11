@@ -176,8 +176,9 @@ email_passw = "your_gmail_pass"
 ################################ Config - part II ############################################
 ### Intervals and timers in seconds  
 
-sleep_timer = 30                 # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
-sleep_sale = 30                  # Sleep timer for sell orders to be filled 
+sleep_timer = 60 #30                 # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
+sleep_buyback_timer = sleep_timer
+sleep_sale = 30 #30                  # Sleep timer for sell orders to be filled 
 flash_crash_ind = 0.5         # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
 ## Interval and number of checks to get current (last) prices 
@@ -197,7 +198,7 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 2.5    # size of margin on bitmex, minor for now 
+bitmex_margin = 3.5    # size of margin on bitmex, minor for now 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
@@ -214,6 +215,7 @@ stopped_mode = ''
 short_flag = False # whether we are shorting, applicable for bitmex 
 bitmex_sell_avg = 0 # for bitmex price averaging 
 price_flip = True # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period); will be True by default for non-td-data cases 
+price_exit = None 
 
 # Logger
 logger = logfile(market, 'trade')
@@ -448,7 +450,7 @@ def check_bb_flag():
 
 ##################### Looking for rebuy points (buyback), based on 4H candles price action or simpler price action depending on data availability
 def buy_back(price_base): 
-    global bb_id, market, exchange_abbr, exchange, sleep_timer
+    global bb_id, market, exchange_abbr, exchange, sleep_buyback_timer
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     global short_flag, td_period, td_period_extended
     
@@ -514,7 +516,7 @@ def buy_back(price_base):
                 direction = 'up' 
                 lprint([market, ": initiating buyback"])
                 flag_reb_c = False 
-            if bback_result_short: 
+            if (bback_result_short) and (exchange == 'bitmex'):     #SHORTS potential, only for bitmex 
                 bback_result = True
                 direction = 'down' 
                 lprint([market, ": initiating buyback"])
@@ -610,7 +612,7 @@ def buy_back(price_base):
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
                 
             # Sleeping 
-            time.sleep(sleep_timer) 
+            time.sleep(sleep_buyback_timer) 
             
     # Finishing up 
     return bback_result, direction
@@ -850,7 +852,8 @@ def to_the_moon(price_reached):
         price_last_moon = get_last_price(market)
         increase_info = 100*float(price_last_moon - price_target)/float(price_target) 
         lprint(["Price update:", price_last_moon, "in comparison with the original target:", round(increase_info, 2), "%"])
-
+        lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
+        
         # Updating the db 
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={}, mooning={} WHERE job_id={}".format(round(price_last_moon, 8), str(round(increase_info, 2)), 1, job_id)
         rows = query(sql_string)
@@ -861,7 +864,6 @@ def to_the_moon(price_reached):
             price_max = price_last_moon
             if td_data_available == False: 
                 trailing_stop = price_max * post_sl_level        
-            lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
 
         #  Checking if this is a time to sell now   
         #  starting only when trailing_stop_flag is active (should not be doing this for BTC runs) 
@@ -873,6 +875,8 @@ def to_the_moon(price_reached):
             if (((short_flag != True) and price_flip and (  (price_last_moon <= price_cutoff) or (price_last_moon <= trailing_stop)  ))  # if we are long and the price drops below original or trailing stop 
             or ((short_flag == True) and price_flip and ( (price_last_moon >= price_cutoff) or (price_last_moon >= trailing_stop)  ))):  
                 lprint(["Run out of fuel @", price_last_moon])
+                sys_msg = "Details: short_flag {}, price_flip {}, price_last_moon {}, price_cutoff {}, trailing_stop {}".format(short_flag, price_flip, price_last_moon, price_cutoff, trailing_stop)
+                lprint([sys_msg])
                 # Check if we need to sell
                 sale_trigger = ensure_sale(price_last_moon)   
                 lprint(["Sale trigger (post-profit)", sale_trigger])
@@ -1663,7 +1667,10 @@ elif stopped_mode == 'post-profit':
 else: 
     # If just called for stop from Telegram 
     lprint(["Sold through telegram"])   
-    bb_price = price_exit
+    if price_exit is not None: 
+        bb_price = price_exit
+    else: 
+        bb_price = price_last 
 
 ### 12. Buying back based on 4H action or alternative price action    
 try: 
@@ -1719,8 +1726,9 @@ try:
         # Run a smart buy task now when we have a buyback confirmation 
         if direction == 'up': #LONGS 
             python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
-        elif direction == 'down': #SHORTS - need to change plus to minus
+        elif direction == 'down': #SHORTS - need to change plus to minus. This only works on bitmex so restricting 
             python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
+        
         print '>>>' + python_call
         p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
         while True:

@@ -40,9 +40,6 @@ bitmex = ccxt.bitmex ({
     'secret': 'SECRET',
 })
  
-# Configure wanted margin on bitmex
-bitmex_margin = 4.5
-
 ################################ Functions ############################################
 
 ### CCTX functions common 
@@ -249,40 +246,59 @@ def bitmex_orderbook(market):
         output_buy_list.append(temp_dict)
     return output_buy_list
 
-def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # Open a long    
+def bitmex_buylimit(market, quantity_buy, buy_rate, contracts = None):    # >> Open a long    
     market = market_std(market)    
     msg = ''  
     buy_rate = bitmex_convert_price(market, buy_rate) 
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
-        contracts = round(quantity_buy * buy_rate)     #* bitmex_margin)     # accounting for margin in the main code anyways 
-    try: 
-        result = bitmex.createOrder(market, 'limit', 'Buy', contracts, float(buy_rate), params = {})
-        result['uuid'] = result['id']  # for consistency in the main code 
-    except: 
-        msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+        contracts = round(quantity_buy * buy_rate)       # accounting for margin in the main code   
+    retry = True    # default 
+    while retry:     
+        try: 
+            # Issues can be related to order not meeting requirements or overloaded system 
+            result = bitmex.createOrder(market, 'limit', 'Buy', contracts, float(buy_rate), params = {})
+            result['uuid'] = result['id']  # for consistency in the main code 
+            retry = False 
+        except: 
+            err_msg = traceback.format_exc()
+            if err_msg.find('overloaded') >= 0:     # surely error handling could be coded better 
+                time.sleep(5)   # try every 5 seconds until success
+            else: 
+                retry = False 
+                msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+    # Handling the outcomes 
     if msg <> '': 
         return msg 
     else: 
        return result       
        
-def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # Open a short      
+def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # >> Open a short      
     market = market_std(market)    
     msg = ''   
     sell_rate = bitmex_convert_price(market, sell_rate)  
     # Calculate contracts; maximum recommended x3-5 margin 
     if contracts is None: 
-        contracts = round(quantity_sell * sell_rate) #* bitmex_margin)     # accounting for margin in the main code anyways 
-    #try: 
-    result = bitmex.createOrder (market, 'limit', 'Sell', contracts, float(sell_rate), params = {})
-    print result #DEBUG
-    result['uuid'] = result['id']  # for consistency in the main code 
-    #except: 
-    #    msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+        contracts = round(quantity_sell * sell_rate)    # accounting for margin in the main code anyways 
+    retry = True    # default 
+    while retry:     
+        try: 
+            # Issues can be related to order not meeting requirements or overloaded system 
+            result = bitmex.createOrder(market, 'limit', 'Sell', contracts, float(sell_rate), params = {})
+            result['uuid'] = result['id']  # for consistency in the main code 
+            retry = False 
+        except: 
+            err_msg = traceback.format_exc()
+            if err_msg.find('overloaded') >= 0:     # surely error handling could be coded better 
+                time.sleep(5)   # try every 5 seconds until success
+            else: 
+                retry = False 
+                msg = 'MIN_TRADE_REQUIREMENT_NOT_MET'
+    # Handling the outcomes 
     if msg <> '': 
         return msg 
     else: 
-       return result     
+       return result       
 
 # A few additional functions relevant to bitmex only (positions and not orders)        
 def bitmex_openpositions(market):  
