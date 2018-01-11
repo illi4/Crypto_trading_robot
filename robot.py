@@ -197,7 +197,7 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 2.5    # size of margin on bitmex, minor for now 
+bitmex_margin = 3.5    # size of margin on bitmex, minor for now 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
@@ -214,6 +214,7 @@ stopped_mode = ''
 short_flag = False # whether we are shorting, applicable for bitmex 
 bitmex_sell_avg = 0 # for bitmex price averaging 
 price_flip = True # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period); will be True by default for non-td-data cases 
+price_exit = None 
 
 # Logger
 logger = logfile(market, 'trade')
@@ -459,7 +460,7 @@ def buy_back(price_base):
     lprint(["###################### BUY_BACK ###########################"])
     
     if strategy == 'btc': 
-        diff_threshold = 0.005 # threshold as a low of the previous 4H minus 0.5% 
+        diff_threshold = 0.005 # threshold as a low/high +- 0.5% depending on the direction 
     else: 
         diff_threshold = 0.01 # 1% for alts 
     
@@ -534,7 +535,7 @@ def buy_back(price_base):
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_h, bb_id) 
                 rows = query(sql_string)
             
-    ## If there is detailed 4H data available 
+    ## If there is detailed 4H (or larger interval) data available 
     else: 
         # Update to set stops according to 4H candles and TD 
         if td_first_run: 
@@ -572,16 +573,16 @@ def buy_back(price_base):
 
             # Getting the current price and showing info on potential longs or potential shorts 
             price_upd = get_last_price(market)
-            if bars['td_direction'].iloc[-1] == 'up': #LONGS potential 
-                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-1], "| TD direction:", bars['td_direction'].iloc[-1], "4H candle high:", bars['high'].iloc[-1], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
+            if bars['td_direction'].iloc[-2] == 'up': #LONGS potential 
+                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle high:", bars['high'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
                 if bars_extended_avail: 
-                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-1], "| TD direction:", bars_extended['td_direction'].iloc[-1] ])    
+                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
                 else: 
                     lprint(["Extended timeframe price data unavailable"])    
-            elif (bars['td_direction'].iloc[-1] == 'down') and (exchange == 'bitmex'): #SHORTS potential, only for bitmex 
-                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-1], "| TD direction:", bars['td_direction'].iloc[-1], "4H candle low:", bars['low'].iloc[-1], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
+            elif (bars['td_direction'].iloc[-2] == 'down') and (exchange == 'bitmex'): #SHORTS potential, only for bitmex 
+                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle low:", bars['low'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
                 if bars_extended_avail: 
-                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-1], "| TD direction:", bars_extended['td_direction'].iloc[-1] ])    
+                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
                 else: 
                     lprint(["Extended timeframe price data unavailable"])    
                     
@@ -591,8 +592,8 @@ def buy_back(price_base):
                 rows = query(sql_string)
             
             # Checking if we should buy back: this happens when the price is above a bullish setup candle; opposite for shorts 
-            if (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > (bars['high'].iloc[-1])*(1 + diff_threshold)):      # switching to long    
-                if (bars_extended_avail and bars['td_direction'].iloc[-1] == bars_extended['td_direction'].iloc[-1]) or (bars_extended_avail == False): 
+            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > (bars['high'].iloc[-2])*(1 + diff_threshold)):      # switching to long    
+                if (bars_extended_avail and bars_extended['td_direction'].iloc[-1] == 'up') or (bars_extended_avail == False): 
                     bback_result = True 
                     direction = 'up'
                     flag_reb_c = False 
@@ -600,8 +601,8 @@ def buy_back(price_base):
                     if bars_extended_avail == False: 
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
                 
-            if (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 60) and (price_upd < (bars['low'].iloc[-1])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
-                if (bars_extended_avail and bars['td_direction'].iloc[-1] == bars_extended['td_direction'].iloc[-1]) or (bars_extended_avail == False): 
+            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 60) and (price_upd < (bars['low'].iloc[-2])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
+                if (bars_extended_avail and bars_extended['td_direction'].iloc[-1] == 'down') or (bars_extended_avail == False): 
                     bback_result = True 
                     direction = 'down'
                     flag_reb_c = False 
@@ -795,11 +796,11 @@ def stop_reconfigure(mode = None):
             price_flip = True 
 
         if not short_flag: # the position is long 
-            sl_target_upd = bars_4h['low'].iloc[-1] * (1 - var_contingency)   
+            sl_target_upd = bars_4h['low'].iloc[-2] * (1 - var_contingency)   
             sl_upd = round(sl_target_upd/price_entry , 5) 
             sl_p_upd = (1.0 - sl_upd)*100.0 
         else: # the position is short 
-            sl_target_upd = bars_4h['high'].iloc[-1] * (1 + var_contingency)   
+            sl_target_upd = bars_4h['high'].iloc[-2] * (1 + var_contingency)   
             sl_upd = round(sl_target_upd/price_entry , 5) 
             sl_p_upd = (1.0 + sl_upd)*100.0  
         
@@ -1689,7 +1690,10 @@ elif stopped_mode == 'post-profit':
 else: 
     # If just called for stop from Telegram 
     lprint(["Sold through telegram"])   
-    bb_price = price_exit
+    if price_exit is None: 
+        bb_price = price_last
+    else: 
+        bb_price = price_exit
 
 ### 12. Buying back based on 4H action or alternative price action    
 try: 

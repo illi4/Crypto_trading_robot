@@ -153,11 +153,14 @@ class tdlib(object):
             # common for any direction     
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
         
+        # Changed this logic to return current TD Setup colour as well 
+        ''' 
         # Return all except for the last one because we need info on the whole period not just the part 
         # (except for larger periods such as daily / 9h        
         if period == '1d' or period == '9h': 
             return bars.tail(tail)
         else: 
             return bars.tail(tail)[:-1]    
-        
+        ''' 
+        return bars.tail(tail)
     
