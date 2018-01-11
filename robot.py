@@ -825,8 +825,9 @@ def stop_reconfigure(mode = None):
         ''' 
         
     # Updating the db with the current SL value 
-    sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl, sl_p, job_id)
-    rows = query(sql_string)   
+    if sl_target_upd is not None: 
+        sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target_upd, sl_upd, job_id)
+        rows = query(sql_string)   
     
     return price_flip, sl_target_upd, sl_upd, sl_p_upd
             
