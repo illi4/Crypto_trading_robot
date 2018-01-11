@@ -824,6 +824,10 @@ def stop_reconfigure(mode = None):
                 lprint(["No bearish 4H candle to update the stop loss"])  
         ''' 
         
+    # Updating the db with the current SL value 
+    sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl, sl_p, job_id)
+    rows = query(sql_string)   
+    
     return price_flip, sl_target_upd, sl_upd, sl_p_upd
             
             
