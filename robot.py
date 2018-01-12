@@ -46,7 +46,7 @@ from loglib import logfile # logging
 import platformlib as platform  # detecting the OS and assigning proper folders 
 
 # Universal functions for all exchanges              
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions, bitmex_leverage
 
 # Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
 from coinigylib import coinigy 
@@ -197,7 +197,7 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 3.5    # size of margin on bitmex, minor for now 
+bitmex_margin = 3    # size of margin on bitmex, minor for now 
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
@@ -215,6 +215,7 @@ short_flag = False # whether we are shorting, applicable for bitmex
 bitmex_sell_avg = 0 # for bitmex price averaging 
 price_flip = True # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period); will be True by default for non-td-data cases 
 price_exit = None 
+sl_extreme = None 
 
 # Logger
 logger = logfile(market, 'trade')
@@ -540,10 +541,10 @@ def buy_back(price_base):
         # Update to set stops according to 4H candles and TD 
         if td_first_run: 
             td_first_run = False 
-            bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10)     
+            bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10, short_flag)     
             time_hour = time.strftime("%H")
             try: 
-                bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 10)   
+                bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 10, short_flag)   
                 bars_extended_avail = True 
             except: 
                 bars_extended_avail = False 
@@ -554,9 +555,9 @@ def buy_back(price_base):
             if (time_hour_update <> time_hour): 
                 # Updating the current hour and the TD values 
                 time_hour = time_hour_update
-                bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)     
+                bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, short_flag)     
                 try: 
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 5)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 5, short_flag)   
                     bars_extended_avail = True 
                 except: 
                     bars_extended_avail = False 
@@ -770,6 +771,7 @@ def stop_reconfigure(mode = None):
     sl_target_upd = None 
     sl_upd = None 
     sl_p_upd = None  
+    sl_extreme_upd = None # for the absolute min / max of TD setup 
    
     # Stop level contingincies depending on the type of crypto
     if strategy == 'btc': 
@@ -781,7 +783,7 @@ def stop_reconfigure(mode = None):
     if (time_hour_update <> time_hour) or mode == 'now': 
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
-        bars_4h = td_info.stats(market, exchange_abbr, td_period, 50000, 5)     
+        bars_4h = td_info.stats(market, exchange_abbr, td_period, 50000, 5, short_flag)     
 
         ''' 
         # Checking whether there was a price flip - previous logic 
@@ -799,12 +801,18 @@ def stop_reconfigure(mode = None):
             sl_target_upd = bars_4h['low'].iloc[-2] * (1 - var_contingency)   
             sl_upd = round(sl_target_upd/price_entry , 5) 
             sl_p_upd = (1.0 - sl_upd)*100.0 
+            if bars_4h['move_extreme'].iloc[-1]  is not None: 
+                sl_extreme_upd = bars_4h['move_extreme'].iloc[-1] * (1 - var_contingency)      
         else: # the position is short 
             sl_target_upd = bars_4h['high'].iloc[-2] * (1 + var_contingency)   
             sl_upd = round(sl_target_upd/price_entry , 5) 
             sl_p_upd = (1.0 + sl_upd)*100.0  
+            if bars_4h['move_extreme'].iloc[-1]  is not None: 
+                sl_extreme_upd = bars_4h['move_extreme'].iloc[-1] * (1 + var_contingency)     
         
         lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction, price_flip) ])
+        lprint([  "New extreme stop value:", sl_extreme_upd ])
+
         
         ''' 
         if short_flag != True: # LONGS  
@@ -830,7 +838,7 @@ def stop_reconfigure(mode = None):
         sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target_upd, sl_upd, job_id)
         rows = query(sql_string)   
     
-    return price_flip, sl_target_upd, sl_upd, sl_p_upd
+    return price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd
             
             
 ##################### Mooning trajectory procedure
@@ -867,12 +875,14 @@ def to_the_moon(price_reached):
     while rocket_flag:  
         # Update to set stops according to 4H candles and TD 
         if td_data_available: 
-            price_flip, sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure()
+            price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
             if sl_target_upd is not None: 
                 trailing_stop = sl_target_upd
                 sl = sl_upd
                 sl_p = sl_p_upd    
-    
+            if sl_extreme_upd is not None: 
+                sl_extreme = sl_extreme_upd
+            
         price_last_moon = get_last_price(market)
         increase_info = 100*float(price_last_moon - price_target)/float(price_target) 
         lprint(["Price update:", price_last_moon, "in comparison with the original target:", round(increase_info, 2), "%"])
@@ -902,6 +912,14 @@ def to_the_moon(price_reached):
                 # Check if we need to sell
                 sale_trigger = ensure_sale(price_last_moon)   
                 lprint(["Sale trigger (post-profit)", sale_trigger])
+            
+            # Also check for extreme moves out of the TD setup 
+            if sl_extreme is not None: 
+                if (short_flag and (price_last_moon > sl_extreme)) or (not short_flag and (price_last_moon < sl_extreme)): 
+                    lprint(["Breached TD extreme stop", price_last_moon])
+                    # Check if we need to sell
+                    sale_trigger = ensure_sale(price_last_moon)   
+                    lprint(["Sale trigger", sale_trigger])
             
             ''' 
             # Disabled to aim at longer time frames 
@@ -1332,6 +1350,7 @@ def check_sell_flag():
     
     sell_initiate = False 
     sql_string = "SELECT selling FROM jobs WHERE market = '{}'".format(market)
+    # print ">>>>>>>>>>>", sql_string #DEBUG
     rows = query(sql_string)
 
     try: 
@@ -1380,6 +1399,10 @@ else:
 if limit_sell_amount > 0: 
     lprint(["Maximum quantity to sell", limit_sell_amount])
 
+### Set up the margin on bitmex 
+if exchange == 'bitmex': 
+    set_margin = bitmex_leverage(market, bitmex_margin)
+    
 '''
 ######## Removed this - will not really be using SL (at least for now), also not applicable for shorts 
 # Check if TP is set higher than SL 
@@ -1461,7 +1484,7 @@ job_id, rows = query_lastrow_id(sql_string)
 start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 10000, 10)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 10000, 10, short_flag)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -1491,12 +1514,14 @@ else:
 ### 7. 4H-based stop loss update    
 if td_data_available: 
     lprint(["Reconfiguring stop loss level based on TD candles"])
-    price_flip, sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure('now')
+    price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure('now')
     if sl_target_upd is not None: 
         sl_target = sl_target_upd
         sl = sl_upd
         sl_p = sl_p_upd    
-
+    if sl_extreme_upd is not None: 
+        sl_extreme = sl_extreme_upd
+ 
 ### 8. Creating new set to store previously executed orders. Will be used to calculate the gains 
 orders_start = set()
 orders_new = set()
@@ -1530,14 +1555,16 @@ dropped_flag = False
 while run_flag and approved_flag:  
     try:    # try & except is here to raise keyboard cancellation exceptions
         if td_data_available:         # update the stop loss level if due and if we have data
-            price_flip, sl_target_upd, sl_upd, sl_p_upd = stop_reconfigure()
+            price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
             if sl_target_upd is not None: 
                 sl_target = sl_target_upd
                 sl = sl_upd
                 sl_p = sl_p_upd    
                 sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target, sl_p, job_id)   # updating the DB 
                 rows = query(sql_string)
-            
+            if sl_extreme_upd is not None: 
+                sl_extreme = sl_extreme_upd
+                
         # Get the last price
         price_last = get_last_price(market)
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
@@ -1564,6 +1591,7 @@ while run_flag and approved_flag:
 
         ## Pierced through stop loss with flip if stop loss is enabled 
         if stop_loss: 
+            # Checking for sequential candle-based signals 
             if ((not short_flag) and price_flip and (price_last <= sl_target)) or (short_flag and price_flip and (price_last >= sl_target)):      
                 dropped_flag = True     # changing the flag 
                 lprint(["Hitting pre-moon stop loss threshold:", sl_target])
@@ -1579,7 +1607,13 @@ while run_flag and approved_flag:
                     lprint([stat_msg])
                     stopped_mode = 'pre-profit'     # used in buyback
                     stopped_price = sl_target
- 
+            # Checking for extreme moves 
+            if sl_extreme is not None:
+                if (short_flag and (price_last > sl_extreme)) or (not short_flag and (price_last < sl_extreme)): 
+                    lprint(["Breached TD extreme stop", price_last])
+                    # Check if we need to sell
+                    sale_trigger = ensure_sale(price_last)   
+                    lprint(["Sale trigger", sale_trigger])
  
         # Check if selling now request has been initiated
         sell_init_flag = check_sell_flag()

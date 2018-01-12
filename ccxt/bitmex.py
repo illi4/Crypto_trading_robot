@@ -359,6 +359,19 @@ class bitmex (Exchange):
                 
         return positions_response  
 
+    def position_leverage(self, symbol=None, leverage = 1, since=None, params={}):
+        if not symbol:
+            raise ExchangeError(self.id + ' fetchPositions requires a symbol param')
+        
+        self.load_markets()
+        market = self.market(symbol)
+        
+        response = self.privatePostPositionLeverage(self.extend({
+            'symbol': market['id'],
+            'leverage': leverage,  
+        }, params))
+    
+        return response   
 
     ####################################################################
         

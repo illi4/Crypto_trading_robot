@@ -354,6 +354,9 @@ def bitmex_convert_price(market, price):  #fixes price considering the TickSize
     price = price.quantize(Decimal(str(tickSize)))
     return price 
      
+def bitmex_leverage(market, leverage): 
+    market = market_std(market)    
+    return bitmex.position_leverage(market, leverage) 
     
 #### Binance functions - using cctx 
 def binance_ticker(market): 

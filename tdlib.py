@@ -11,10 +11,10 @@ class tdlib(object):
     def __init__(self):
         self.public = ['stats']
         
-    def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10):
+    def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10, short_flag = False):
         # example period = '5min' 
         filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'
-        #print "Checked filename", filename 
+        #print "Short_flag", short_flag 
         
         try: 
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
@@ -42,6 +42,7 @@ class tdlib(object):
         bars.loc[:, 'td_down_1_high'] = None # for the bearish setup storing info on 1's high       
         bars.loc[:, 'td_up_2_cl_abv_1'] = None # for the bullish setup checking if 2 closed higher than 1  
         bars.loc[:, 'td_up_2_close'] = None # for the further comparison  
+        bars.loc[:, 'move_extreme'] = None # for stopping when the setup extreme is broken
 
         # Initial direction and values 
         direction_up = False 
@@ -50,6 +51,7 @@ class tdlib(object):
         up_2_cl_abv_1 = False
         td_up_2_close = None
         td_down_1_high = None
+        move_extreme = None 
 
         if (bars['close'].iloc[5] > bars['close'].iloc[4]): 
             direction_up = True
@@ -76,6 +78,7 @@ class tdlib(object):
                 nextbar_beyond = False 
                 direction_down = True           
                 bullish_flip = False 
+                move_extreme = None
                 
             if (bars['close'].iloc[i - 1] < bars['close'].iloc[i - 5]) and (bars['close'].iloc[i] > bars['close'].iloc[i - 4]): 
                 bullish_flip = True     #bullish flip
@@ -84,6 +87,7 @@ class tdlib(object):
                 nextbar_beyond = False 
                 direction_up = True        
                 bearish_flip = False 
+                move_extreme = None
            
             if bearish_flip and direction_up: 
                 #print 'Bearish flip 1', bars['close'].index[i]
@@ -119,6 +123,21 @@ class tdlib(object):
             if (direction_up and (setup_up > 1) and (bars['high'].iloc[i] > bars['high'].iloc[i - setup_up + 1])):
                 nextbar_beyond = True    # print "Next green is trading above 1" 
 
+            ## Move_extreme update 
+            if (direction_down and (setup_down > 1) and short_flag):
+                if setup_down == 2: 
+                    move_extreme = max(bars['high'].iloc[i], bars['high'].iloc[i - 1])
+                else: 
+                    if (bars['high'].iloc[i] > move_extreme): 
+                        move_extreme = bars['high'].iloc[i]  
+            
+            if (direction_up and (setup_up > 1) and not short_flag):
+                if setup_up == 2: 
+                    move_extreme = min(bars['low'].iloc[i], bars['low'].iloc[i - 1])
+                else: 
+                    if (bars['low'].iloc[i] < move_extreme): 
+                        move_extreme = bars['low'].iloc[i]  
+                
             ## Check when 2 closes higher than 1 for the bullish setup, also store 2 close 
             if (direction_up and (setup_up == 2)):
                 td_up_2_close = bars['close'].iloc[i]
@@ -152,6 +171,7 @@ class tdlib(object):
                 bars['td_up_2_close'].iloc[i] = td_up_2_close
             # common for any direction     
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
+            bars['move_extreme'].iloc[i] = move_extreme
         
         # Changed this logic to return current TD Setup colour as well 
         ''' 

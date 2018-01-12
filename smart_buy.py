@@ -42,7 +42,7 @@ from loglib import logfile # logging
 import platformlib as platform                                    # detecting the OS and assigning proper folders 
 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions
+from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions, bitmex_leverage
 
 # Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
 from coinigylib import coinigy 
@@ -88,7 +88,7 @@ chat = telegram()
 
 ### Default flag for shorting. The bot can be used to short on bitmex, not only go long 
 short_flag = False 
-bitmex_margin = 3.5   # size of margin on bitmex, minor for now
+bitmex_margin = 3   # size of margin on bitmex, minor for now
 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable  
@@ -180,6 +180,10 @@ try:
     logger = logfile(market, 'buy')    
 
     # Getting for the whole if there is no input 
+    balance = getbalance(exchange, trade)
+    balance_trade = float(balance['Available'])
+    #print "TRADE BALANCE", balance_trade   #DEBUG
+
     try: 
         source_position = float(argv[4])
         # For bitmex shorts 
@@ -191,7 +195,7 @@ try:
         source_position = float(balance['Available'])
         lprint(["Buying for the whole balance of", source_position])
     
-    # Also change to properly reflect the margin     
+    # Also change to properly reflect the margin    
     if exchange == 'bitmex': 
         source_position = source_position*bitmex_margin
     
@@ -222,6 +226,10 @@ if currency == 'BTC':
     diff_threshold = 0.005  # 0.5% 
 else: 
     diff_threshold = 0.01   # 1% 
+
+### Set up the margin on bitmex 
+if exchange == 'bitmex': 
+    set_margin = bitmex_leverage(market, bitmex_margin)
     
 ### Price data analysis 
 time_hour = time.strftime("%H") 
@@ -403,7 +411,7 @@ def ensure_buy():
 
 ##################### Checking balance and changing the position size
 def ensure_balance(): 
-    global wf_id, job_id, wf_run_mode 
+    global wf_id, job_id, wf_run_mode, bitmex_margin
     global approved_flag  
     global source_position, price_curr
     global comission_rate, exchange
@@ -417,15 +425,23 @@ def ensure_balance():
         
         # Changing the available balance and changing the value if there is no enough funds       
         if exchange == 'bitmex': 
-            return True     # works fine for bitmex (can go slightly beyond the margin), there are issues with other exchanges only 
+            # rounding to 4 decimals on bitmex 
+            #balance_avail = round(Decimal(str(balance_avail)), 5)  # does not work this way
+            balance_avail = Decimal(balance_avail).quantize(Decimal('.0001'), rounding='ROUND_DOWN')
+            if balance_avail * Decimal(0.99) * bitmex_margin < source_position:         # 0.01 is a commission I reckon 
+                source_position = balance_avail * bitmex_margin * Decimal(0.99) 
+                lprint(['Corrected the position in ensure balance:', balance_avail ])     
+                return True
+            else: 
+                return True 
         else: 
             if Decimal(str(balance_avail)) < Decimal(str(source_position)): 
                 source_position = Decimal(str(balance_avail))  
-                lprint(['Corrected the position in ensure balance:', source_position ])    
+                lprint(['Corrected the position in ensure balance:', source_position ])       
                 return True 
             else: 
                 return True 
- 
+        
         
 ###################################################################################
 ############################## Main workflow #########################################
@@ -713,7 +729,7 @@ while buy_flag and approved_flag:
                         quantity = round(Decimal(str(source_position)), 6)
                         buy_rate = round(buy_rate, 0) 
                         contracts = round(quantity * buy_rate)   # margin is already accounted for in the main code     
-                        # print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
+                        print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
                     else: # All alts are traded vs btc 
                         quantity = round(Decimal(str(source_position)), 6)
                         buy_rate =  round(buy_rate, 20)    
