@@ -895,7 +895,7 @@ def to_the_moon(price_reached):
         if ((short_flag != True) and (price_last_moon > price_max)) or ((short_flag == True) and (price_last_moon < price_max)):  
             # Setting higher thresholds if there is no 4H data
             price_max = price_last_moon
-            if td_data_available == False: 
+            if not td_data_available: 
                 trailing_stop = price_max * post_sl_level        
             lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
 
@@ -909,8 +909,11 @@ def to_the_moon(price_reached):
             if (((not short_flag) and price_flip and (price_last_moon <= min(price_cutoff, trailing_stop)) )  # if we are long and the price drops below original or trailing stop 
             or (short_flag and price_flip and (price_last_moon >= max(price_cutoff, trailing_stop))) ):  
                 lprint(["Run out of fuel @", price_last_moon])
-                # Check if we need to sell
-                sale_trigger = ensure_sale(price_last_moon)   
+                # Check if we need to sell. No need to do this if we have price action data (backtested for performance) 
+                if not td_data_available: 
+                    sale_trigger = ensure_sale(price_last_moon)   
+                else: 
+                    sale_trigger = True 
                 lprint(["Sale trigger (post-profit)", sale_trigger])
             
             # Also check for extreme moves out of the TD setup 
@@ -918,11 +921,14 @@ def to_the_moon(price_reached):
                 if (short_flag and (price_last_moon > sl_extreme)) or (not short_flag and (price_last_moon < sl_extreme)): 
                     lprint(["Breached TD extreme stop", price_last_moon])
                     # Check if we need to sell
-                    sale_trigger = ensure_sale(price_last_moon)   
+                    if not td_data_available: 
+                        sale_trigger = ensure_sale(price_last_moon)   
+                    else: 
+                        sale_trigger = True 
                     lprint(["Sale trigger", sale_trigger])
             
             ''' 
-            # Disabled to aim at longer time frames 
+            # Disabled to aim at longer time frames and time analysis 
             # It is a good idea to sell at +45% when something is pumping 
             if increase_info > 45:
                 sale_trigger = True 
@@ -974,7 +980,7 @@ def to_the_moon(price_reached):
     # Finished the loop - returning the proper code
     return status
 
-##################### Anti-manipulation and anti-flash-crash filter    
+##################### Anti-manipulation and anti-flash-crash filter for cases when we do not rely on time analysis (there is no data) 
 def ensure_sale(check_price): 
     global short_flag
     
@@ -1026,7 +1032,7 @@ def ensure_sale(check_price):
                 proceed_sale = False
                 break
                 
-    ## Common sense, when prices are filled   
+ 
     '''
     # Not useful really considering the approach above
     if short_flag != True: # LONGS  
@@ -1350,7 +1356,6 @@ def check_sell_flag():
     
     sell_initiate = False 
     sql_string = "SELECT selling FROM jobs WHERE market = '{}'".format(market)
-    # print ">>>>>>>>>>>", sql_string #DEBUG
     rows = query(sql_string)
 
     try: 
@@ -1595,8 +1600,13 @@ while run_flag and approved_flag:
             if ((not short_flag) and price_flip and (price_last <= sl_target)) or (short_flag and price_flip and (price_last >= sl_target)):      
                 dropped_flag = True     # changing the flag 
                 lprint(["Hitting pre-moon stop loss threshold:", sl_target])
-                sale_trigger = ensure_sale(sl_target)   # check if we need to sell 
-                lprint(["Sale trigger (pre-moon):", sale_trigger])
+                # Check if we need to sell 
+                if not td_data_available: 
+                    sale_trigger = ensure_sale(sl_target)   
+                else: 
+                    sale_trigger = True                
+                lprint(["Sale (stop) trigger (pre-moon):", sale_trigger])
+                
                 if sale_trigger == True:       
                     # Stop-loss triggered
                     lprint(["Triggering pre-profit stop loss on", price_last])
@@ -1607,12 +1617,16 @@ while run_flag and approved_flag:
                     lprint([stat_msg])
                     stopped_mode = 'pre-profit'     # used in buyback
                     stopped_price = sl_target
+                    
             # Checking for extreme moves 
             if sl_extreme is not None:
                 if (short_flag and (price_last > sl_extreme)) or (not short_flag and (price_last < sl_extreme)): 
                     lprint(["Breached TD extreme stop", price_last])
                     # Check if we need to sell
-                    sale_trigger = ensure_sale(price_last)   
+                    if not td_data_available: 
+                        sale_trigger = ensure_sale(price_last)   
+                    else: 
+                        sale_trigger = True             
                     lprint(["Sale trigger", sale_trigger])
  
         # Check if selling now request has been initiated

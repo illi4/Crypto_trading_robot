@@ -690,7 +690,7 @@ while buy_flag and approved_flag:
         ### Price conditions with floating price 
         if (fixed_price_flag != True) and (float_price_starter != True): 
             lprint(["Starting for the floating (market) price"])
-            # ensure_balance() # logic changed
+            # Checking for non-4h (time interval-based) cases 
             float_price_starter = ensure_buy()   
             lprint(["Buy trigger", float_price_starter])
                               
