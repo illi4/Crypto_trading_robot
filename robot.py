@@ -766,8 +766,8 @@ def stop_reconfigure(mode = None):
     global market, exchange_abbr, strategy 
     global price_entry, short_flag, td_period
     
-    price_flip = False # default is False   
-    price_direction = None 
+    price_flip_upd = None # default is None   
+    price_direction_move = None 
     sl_target_upd = None 
     sl_upd = None 
     sl_p_upd = None  
@@ -775,9 +775,9 @@ def stop_reconfigure(mode = None):
    
     # Stop level contingincies depending on the type of crypto
     if strategy == 'btc': 
-        var_contingency = 0.0075    # 0.75% lower/higher than the previous 4H candle   
+        var_contingency = 0.0075    # 0.75% lower/higher than the previous 4H candle for btc
     else: 
-        var_contingency = 0.01     # 1% lower/higher than the previous 4H candle   
+        var_contingency = 0.01     # 1% lower/higher than the previous 4H candle for alts
     
     time_hour_update = time.strftime("%H")
     if (time_hour_update <> time_hour) or mode == 'now': 
@@ -793,9 +793,12 @@ def stop_reconfigure(mode = None):
             price_flip_upd = False 
         ''' 
         # New logic: return the TD direction of the last candle per td_interval 
-        price_direction = bars_4h['td_direction'].iloc[-1]      # return 'up' or 'down' 
-        if (not short_flag and price_direction == 'down') or (short_flag and price_direction == 'up'): 
-            price_flip = True 
+        price_direction_move = bars_4h['td_direction'].iloc[-1]      # return 'up' or 'down' 
+        print "CHECK: short flag", short_flag, "price_direction", price_direction_move
+        
+        if (not short_flag and price_direction_move == 'down') or (short_flag and price_direction_move == 'up'): 
+            price_flip_upd = True 
+            #print ">>>>>> Price_flip_upd", price_flip_upd #DEBUG 
 
         if not short_flag: # the position is long 
             sl_target_upd = bars_4h['low'].iloc[-2] * (1 - var_contingency)   
@@ -810,11 +813,11 @@ def stop_reconfigure(mode = None):
             if bars_4h['move_extreme'].iloc[-1]  is not None: 
                 sl_extreme_upd = bars_4h['move_extreme'].iloc[-1] * (1 + var_contingency)     
         
-        lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction, price_flip) ])
+        lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
         lprint([  "New extreme stop value:", sl_extreme_upd ])
-
+        #print ">>> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
         
-        ''' 
+        ''' #Old code
         if short_flag != True: # LONGS  
             if bars_4h['td_direction'].iloc[-1] == 'up': 
                 sl_target_upd = bars_4h['low'].iloc[-1] * (1 - var_contingency)   
@@ -838,7 +841,7 @@ def stop_reconfigure(mode = None):
         sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target_upd, sl_upd, job_id)
         rows = query(sql_string)   
     
-    return price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd
+    return price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd
             
             
 ##################### Mooning trajectory procedure
@@ -851,7 +854,7 @@ def to_the_moon(price_reached):
     global stopped_price
     global trailing_stop_flag, start_time, bars, strategy, diff_threshold
     global sl, sl_target, sl_p
-    global short_flag, price_flip
+    global short_flag, price_flip, sl_extreme
 
     sale_trigger = False # default
     
@@ -875,13 +878,16 @@ def to_the_moon(price_reached):
     while rocket_flag:  
         # Update to set stops according to 4H candles and TD 
         if td_data_available: 
-            price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
+            price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
+            #print ">>> Returned price_flip {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
             if sl_target_upd is not None: 
                 trailing_stop = sl_target_upd
                 sl = sl_upd
                 sl_p = sl_p_upd    
             if sl_extreme_upd is not None: 
                 sl_extreme = sl_extreme_upd
+            if price_flip_upd is not None: 
+                price_flip = price_flip_upd
             
         price_last_moon = get_last_price(market)
         increase_info = 100*float(price_last_moon - price_target)/float(price_target) 
@@ -1519,14 +1525,17 @@ else:
 ### 7. 4H-based stop loss update    
 if td_data_available: 
     lprint(["Reconfiguring stop loss level based on TD candles"])
-    price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure('now')
+    price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure('now')
+    #print ">>> Returned price_flip {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
     if sl_target_upd is not None: 
         sl_target = sl_target_upd
         sl = sl_upd
         sl_p = sl_p_upd    
     if sl_extreme_upd is not None: 
         sl_extreme = sl_extreme_upd
- 
+    if price_flip_upd is not None: 
+        price_flip = price_flip_upd
+        
 ### 8. Creating new set to store previously executed orders. Will be used to calculate the gains 
 orders_start = set()
 orders_new = set()
@@ -1560,7 +1569,8 @@ dropped_flag = False
 while run_flag and approved_flag:  
     try:    # try & except is here to raise keyboard cancellation exceptions
         if td_data_available:         # update the stop loss level if due and if we have data
-            price_flip, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
+            price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure()
+            #print ">>> Returned price_flip {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd) #DEBUG 
             if sl_target_upd is not None: 
                 sl_target = sl_target_upd
                 sl = sl_upd
@@ -1569,17 +1579,19 @@ while run_flag and approved_flag:
                 rows = query(sql_string)
             if sl_extreme_upd is not None: 
                 sl_extreme = sl_extreme_upd
-                
+            if price_flip_upd is not None: 
+                price_flip = price_flip_upd
+        
         # Get the last price
         price_last = get_last_price(market)
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
-        lprint([exchange, market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target ])
+        lprint([exchange, market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target, "sl_extreme", sl_extreme, "| price flip:", price_flip])
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={} WHERE job_id={}".format(round(price_last, 8), price_compared, job_id)
         rows = query(sql_string)
         
         ### Running the main conditions check to trigger take profit / stop loss 
         ## Checking TP reached - for longs / shorts 
-        if ((short_flag != True) and (price_last >= price_target)) or ((short_flag == True) and (price_last <= price_target)):      
+        if (short_flag and (price_last < price_target)) or ((not short_flag) and (price_last > price_target)):      
             lprint(["Take-profit price reached"])
             send_notification("Mooning", market + ": Reached the initial TP target and mooning now: " + str(price_last))
             status = to_the_moon(price_last)    # mooning for as long as possible 
@@ -1597,7 +1609,7 @@ while run_flag and approved_flag:
         ## Pierced through stop loss with flip if stop loss is enabled 
         if stop_loss: 
             # Checking for sequential candle-based signals 
-            if ((not short_flag) and price_flip and (price_last <= sl_target)) or (short_flag and price_flip and (price_last >= sl_target)):      
+            if (short_flag and price_flip and (price_last >= sl_target)) or ((not short_flag) and price_flip and (price_last <= sl_target)):      
                 dropped_flag = True     # changing the flag 
                 lprint(["Hitting pre-moon stop loss threshold:", sl_target])
                 # Check if we need to sell 
