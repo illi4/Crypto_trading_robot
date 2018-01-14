@@ -711,6 +711,7 @@ while buy_flag and approved_flag:
                     lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
                         fixed_price_starter = True 
+                        chat.send("Position buy initiated based on time analysis for " + market + ". Direction: long.") 
                     else: 
                         lprint(["> Long buy condition not met"])
                 else: #SHORTS 
@@ -719,10 +720,10 @@ while buy_flag and approved_flag:
                     lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value):  
                         fixed_price_starter = True 
+                        chat.send("Position buy initiated based on time analysis for " + market + ". Direction: long.") 
                     else: 
                         lprint(["> Short buy condition not met"])
             
-      
             
         ### If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
