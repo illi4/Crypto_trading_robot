@@ -176,9 +176,10 @@ email_passw = "your_gmail_pass"
 ################################ Config - part II ############################################
 ### Intervals and timers in seconds  
 
-sleep_timer = 60 #30                 # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
-sleep_sale = 30                  # Sleep timer for sell orders to be filled 
-flash_crash_ind = 0.5         # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
+sleep_timer = 60 #30                             # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
+sleep_timer_buyback = sleep_timer       # Sleep timer for buybacks 
+sleep_sale = 30                                     # Sleep timer for sell orders to be filled 
+flash_crash_ind = 0.5                            # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
 ## Interval and number of checks to get current (last) prices 
 steps_ticker = 3 
@@ -450,7 +451,7 @@ def check_bb_flag():
 
 ##################### Looking for rebuy points (buyback), based on 4H candles price action or simpler price action depending on data availability
 def buy_back(price_base): 
-    global bb_id, market, exchange_abbr, exchange, sleep_timer
+    global bb_id, market, exchange_abbr, exchange, sleep_timer_buyback
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     global short_flag, td_period, td_period_extended
     
@@ -535,6 +536,9 @@ def buy_back(price_base):
             if bb_id is not None: 
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_h, bb_id) 
                 rows = query(sql_string)
+               
+            # Sleeping 
+            time.sleep(sleep_timer_buyback)     
             
     ## If there is detailed 4H (or larger interval) data available 
     else: 
@@ -610,9 +614,9 @@ def buy_back(price_base):
                     lprint(["TD buyback initiated on the short side"])
                     if bars_extended_avail == False: 
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
-                
+            
             # Sleeping 
-            time.sleep(sleep_timer) 
+            time.sleep(sleep_timer_buyback)     
             
     # Finishing up 
     return bback_result, direction
@@ -1757,76 +1761,86 @@ else:
 
 ### 12. Buying back based on 4H action or alternative price action    
 try: 
-    lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
-    
-    if exchange == 'bitmex': 
-        buy_trade_price = (main_curr_from_sell)/bitmex_margin
-    else: 
-        buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate)    # commission depending on the exchange. If we do not have TD data
-    
-    # Inserting into buyback information table 
-    sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
-    bb_id, rows = query_lastrow_id(sql_string)      
-    
-    time_bb_initiated = time.time()     # getting a snapshot of time for buyback so that we wait for at least an hour before starting buyback 
-    bb_flag, direction = buy_back(bb_price)      # runs until a result is returned with a confirmation and a direction which defines the next step  
-    
-    # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
-    if bb_flag: 
-        send_notification('Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
-        
-        # Launching workflow to buy and resume the task with same parameters
-        # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
-        
-        if direction == 'up': #LONGS 
-            sl_price = bb_price * (1 - diff_threshold)  # depending on the strategy 
-            tp_price = bb_price * tp
-        elif direction == 'down': 
-            sl_price = bb_price * (1 + diff_threshold)  # depending on the strategy 
-            tp_price = bb_price / tp
 
-        #print "bb_price {}, tp {}, diff_threshold {}, tp_price {}, sl_price {}".format(bb_price, tp, diff_threshold, tp_price, sl_price) # DEBUG 
-            
-        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
-        wf_id, rows = query_lastrow_id(sql_string)       
-
-        if wf_id is not None: 
-            buy_market = '{0}-{1}'.format(trade, currency)
-            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange_abbr, wf_id) 
-            job_id, rows = query_lastrow_id(sql_string)
-            
-        # Buy depending on the platform. We will buy @ market price now, and the price entry price is already in the DB
-        if td_data_available: 
-            mode_buy = 'now' 
+    # Starting buyback except for the cases when the task was aborted through telegram 
+    if stopped_mode != 'telegram':      
+        lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
+        
+        if exchange == 'bitmex': 
+            buy_trade_price = (main_curr_from_sell)/bitmex_margin
         else: 
-            mode_buy = 'reg' 
+            buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate)    # commission depending on the exchange. If we do not have TD data
+        
+        # Inserting into buyback information table 
+        sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
+        bb_id, rows = query_lastrow_id(sql_string)      
+        
+        time_bb_initiated = time.time()     # getting a snapshot of time for buyback so that we wait for at least an hour before starting buyback 
+        bb_flag, direction = buy_back(bb_price)      # runs until a result is returned with a confirmation and a direction which defines the next step  
+        
+        # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
+        if bb_flag: 
+            send_notification('Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
+            
+            # Launching workflow to buy and resume the task with same parameters
+            # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
+            
+            if direction == 'up': #LONGS 
+                sl_price = bb_price * (1 - diff_threshold)  # depending on the strategy 
+                tp_price = bb_price * tp
+            elif direction == 'down': 
+                sl_price = bb_price * (1 + diff_threshold)  # depending on the strategy 
+                tp_price = bb_price / tp
 
-        logger.close() # closing logs 
+            #print "bb_price {}, tp {}, diff_threshold {}, tp_price {}, sl_price {}".format(bb_price, tp, diff_threshold, tp_price, sl_price) # DEBUG 
+                
+            sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
+            wf_id, rows = query_lastrow_id(sql_string)       
+
+            if wf_id is not None: 
+                buy_market = '{0}-{1}'.format(trade, currency)
+                sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange_abbr, wf_id) 
+                job_id, rows = query_lastrow_id(sql_string)
+                
+            # Buy depending on the platform. We will buy @ market price now, and the price entry price is already in the DB
+            if td_data_available: 
+                mode_buy = 'now' 
+            else: 
+                mode_buy = 'reg' 
+
+            logger.close() # closing logs 
+            
+            sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)  # deleting buyback from the table 
+            rows = query(sql_string)
+            
+            # Run a smart buy task now when we have a buyback confirmation 
+            if direction == 'up': #LONGS 
+                python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
+            elif direction == 'down': #SHORTS - need to change plus to minus
+                python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
+            print '>>>' + python_call
+            p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
+            while True:
+                out = p.stderr.read(1)
+                if out == '' and p.poll() != None:
+                    break
+                if out != '':
+                    sys.stdout.write(out)
+                    sys.stdout.flush()
         
-        sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)  # deleting buyback from the table 
-        rows = query(sql_string)
-        
-        # Run a smart buy task now when we have a buyback confirmation 
-        if direction == 'up': #LONGS 
-            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
-        elif direction == 'down': #SHORTS - need to change plus to minus
-            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
-        print '>>>' + python_call
-        p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
-        while True:
-            out = p.stderr.read(1)
-            if out == '' and p.poll() != None:
-                break
-            if out != '':
-                sys.stdout.write(out)
-                sys.stdout.flush()
+        # If a buyback cancellation was requested 
+        else: 
+            send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
+            # Delete buyback from the DB 
+            sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
+            rows = query(sql_string)
     
-    # If a buyback cancellation was requested 
+    # If telegram stop - finalise and exit 
     else: 
-        send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
         # Delete buyback from the DB 
         sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
         rows = query(sql_string)
+        logger.close_and_exit()
     
 except KeyboardInterrupt:
     print "Buyback cancelled or the task was finished"  
