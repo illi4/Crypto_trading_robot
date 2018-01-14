@@ -91,7 +91,9 @@ short_flag = False
 bitmex_margin = 3   # size of margin on bitmex, minor for now
 
 # Time analysis candles length 
-td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable  
+td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
+td_period_extended = '1d'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
+
 
 ### Platform
 platform = platform.platformlib()
@@ -147,8 +149,8 @@ def lprint(arr):
 try: 
     # Modes 
     mode = argv[1].lower()
-    if mode not in ['reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s']: 
-        print 'Incorrect mode specified (should be reg, brk, now, reg-s, brk-s, 4h)\n\n'
+    if mode not in ['reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s', 'fullta', 'fullta-s']: 
+        print "Incorrect mode specified (should be reg, 'reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s', 'fullta', 'fullta-s')\n\n"
         send_notification('Incorrect mode', 'Incorrect mode specified')
         exit(0)
         
@@ -213,9 +215,13 @@ try:
     except:
         time_restriction = 0
 
+    # Shorts are only supported for bitmex 
+    if exchange != 'bitmex' and short_flag: 
+        lprint(["Shorts are not supported on the exchange", exchange])
+    
     ### Greetings (for logs readability) 
     lprint(["###################### SMART_BUY ###########################"])
-
+        
     
 except:
     print 'Specify the parameters: mode exchange basic_curr-altcoin total_in_basic_curr [price] [time limit for the price in minutes] \n>Example: reg/brk/now/reg-s/brk-s/4h btrx BTC-QTUM 0.005 0.0038 15 \nThis tries to buy QTUM for 0.005 BTC at Bittrex for the price of 0.0038 for 15 minutes, then switches to market prices \n\nModes: \n4h - buy based on 4h candles price action \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price) \noptions with -s mean the same but they run in the simulation mode \nnow is immediately \n\nExchanges: btrx, bina, bmex (bittrex, binance, bitmex)'
@@ -234,26 +240,40 @@ if exchange == 'bitmex':
 ### Price data analysis 
 time_hour = time.strftime("%H") 
 td_data_available = True  # default which will be changed to False when needed  
+td_data_extended_available = True  # default which will be changed to False when needed  
 
 # Sleeping for a bit so that information on workflows is updated in the database just in case 
 time.sleep(int(30/speedrun))
 
+# TD data availability 
 try: 
     bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10)    
+    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 50000, 10)    
     try: 
         if bars == None: 
             td_data_available = False 
+        if bars_extended == None: 
+            td_data_extended_available = False 
     except: 
+        # Smaller interval 
         for elem in bars['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
             if elem is None: 
                 td_data_available = False 
         num_null = bars['open'].isnull().sum()
         if num_null > 0: 
             td_data_available = False 
+        # Larger interval 
+        for elem in bars_extended['td_setup'][-3:]:      # should have at least 3 bars with filled TD values
+            if elem is None: 
+                td_data_extended_available = False 
+        num_null = bars_extended['open'].isnull().sum()
+        if num_null > 0: 
+            td_data_extended_available = False 
 except: 
     td_data_available = False 
+    td_data_extended_available = False 
  
-print "TD data availability:", td_data_available
+print "TD data availability:", td_data_available, "| extended ", td_data_extended_available
 
 ### Check if this is a part of workflow (meaning that a job should be then launched)   
 sql_string = "SELECT wf_id, run_mode FROM workflow WHERE market = '{}' AND exchange = '{}'".format(market, exchange_abbr)
@@ -491,6 +511,9 @@ if mode == 'brk-s':
 if mode == '4h-s': 
     wf_run_mode = 's' # simulating
     mode = '4h' # setting up a regular mode 
+if mode == 'fullta-s': 
+    wf_run_mode = 's' # simulating
+    mode = 'fullta' # setting up a regular mode   
   
 # Breakout confirmation price 
 if mode == 'brk': 
@@ -501,7 +524,10 @@ if mode == 'now':
     orders_check = 3
 
 # Checking 4H data availability 
-if mode == '4h' and (td_data_available != True): 
+if mode == '4h' and not td_data_available: 
+    print "TD data is unavailable, not possible to start the task"
+    logger.close_and_exit()
+if mode == 'fullta' and not td_data_available and not td_data_extended_available: 
     print "TD data is unavailable, not possible to start the task"
     logger.close_and_exit()
     
@@ -617,7 +643,7 @@ while buy_flag and approved_flag:
             rows = query(sql_string)
 
         # 4H mode     
-        if mode == '4h':
+        if mode == '4h' or mode == 'fullta':
             fixed_price_flag = True # treating as a fixed starter 
                 
         ### Price conditions with fixed price for different scenarios
@@ -638,7 +664,7 @@ while buy_flag and approved_flag:
                 else: 
                     lprint([exchange, market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
                     
-            ## If we are waiting for a breakout  - the logic is simple 
+            ## Mode: If we are waiting for a breakout  - the logic is simple 
             if mode == 'brk':
                 if price_curr >= breakout_target:  
                     lprint([exchange, market, ': breakout price', breakout_target, 'reached confirming.'])    
@@ -652,21 +678,30 @@ while buy_flag and approved_flag:
                 else: 
                     lprint([exchange, market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
             
-            ## If requested to buy now 
+            ## Mode: If requested to buy now 
             if mode == 'now':
                 fixed_price_starter = True 
             
-            ### 4h based on price action 
-            if mode == '4h':
+            ### Mode: 4h based on price action, or larger interval auto-based if fullta is used 
+            if mode == '4h' or mode == 'fullta':
                 time_hour_update = time.strftime("%H")
                 if (time_hour_update <> time_hour): 
                     # Updating the current hour and the TD values 
-                    lprint(['Updating the 4H candles price data'])    
+                    lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
                     bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)   
-                
+                    
+                    # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
+                    lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
+                    if mode == 'fullta': 
+                        bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5)   
+                        if bars_extended['td_direction'].iloc[-1] == 'down': 
+                            short_flag = True 
+                        else: 
+                            short_flag = False 
+                            
                 # Different conditions depending on long / short: 
-                if short_flag != True: # LONGS  
+                if not short_flag: # LONGS  
                     check_value = bars['high'].iloc[-2] * (1 + diff_threshold)
                     lprint([ exchange, ": TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
                     lprint([ exchange, ": Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
@@ -683,7 +718,9 @@ while buy_flag and approved_flag:
                     else: 
                         lprint([ exchange,  ": condition for buying short not met"])
             
-        # If meeting conditions for fixed price - get the current   
+      
+            
+        ### If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
             fixed_price = get_last_price(market)        
             

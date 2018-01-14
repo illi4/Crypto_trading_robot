@@ -225,10 +225,11 @@ while True:
             "Check balances: 'balance' \nSell now: 'sellnow' \nSmart buy: 'buy' \n" + \
             "Cancel buy: 'stopbuy' \nStop monitoring: 'stop listener' "
             chat.send(msg)
-            msg = 'Buy modes: reg/brk/now/reg-s/brk-s/4h \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
+            msg = 'Buy modes: reg/brk/now/reg-s/brk-s/4h/4h-s/fullta/fullta-s \nreg - buy at fixed price \nbrk - buy on breakout (above the specified price)\n'\
             'options with -s mean simulation mode \n'\
             '4h buys based on 4h price action \n'\
-            'now buys immediately in real mode (or in simulation if there is simulation workflow) \n\n' 
+            'now buys immediately in real mode (or in simulation if there is simulation workflow) \n\n'\
+            'fullta buys based on price action when lower time interval and higher time intervals are in line'
             chat.send(msg)
             msg = 'Job (task) modes: s/r/sns/rns/rnts \ns - simulation with stops \nr - real mode with stops and take profit \n'\
             'sns - simulation without stops \nrns - real mode with no stops (careful!) \n'\
