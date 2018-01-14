@@ -53,7 +53,7 @@ def telegram_buy(wf_id = None):
     chat.send('4h bmex usd-btc 0.05')
     chat.send('now bmex XRPH18 -0.1')
     chat.send('brk btrx btc-powr 0.5 0.000095')
-    reply_string = 'Modes: reg/brk/now/reg-s/brk/4h, add -s (reg-s) for simulation' 
+    reply_string = 'Modes: reg/brk/now/reg-s/brk/4h/fullta, add -s (reg-s) for simulation' 
     chat.send(reply_string) 
 
     # Wait for a response
