@@ -7,19 +7,25 @@ from time import localtime, strftime
 # Universal functions for all exchanges 
 from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances
 
+# Config file 
+import config 
+
+
 # Telegram functions 
-TOKEN = "YOUR_TOKEN"
-URL = "https://api.telegram.org/bot{}/".format(TOKEN)
+TOKEN = config.telegram_token
+URL = config.telegram_url
 
 payload = ""
 headers = {
-    'x-api-key': "YOUR_KEY",
-    'x-api-secret': "YOUR_SECRET_KEY",
+    'x-api-key': config.telegram_key,
+    'x-api-secret': config.telegram_secret,
     'content-type': "application/json"
     }
 
-chat_id = 9999999999  # YOUR CHAT ID 
-telegram_check_sec = 1 # Telegram monitoring interval  
+chat_id = config.telegram_chat_id  # my chat id 
+
+# Telegram monitoring interval  
+telegram_check_sec = config.telegram_check_sec
 
 class telegram(object):
     def __init__(self):

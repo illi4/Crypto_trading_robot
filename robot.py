@@ -54,6 +54,9 @@ coinigy = coinigy()
 
 ################################ Config - part I ############################################
 
+### Import a configuration file 
+import config 
+
 ### TD analysis library
 import tdlib as tdlib
 td_info = tdlib.tdlib()
@@ -64,12 +67,12 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 print "Initialising..."
 
 ### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun = 1  #1 
+speedrun = config.speedrun
 
 ### Telegram integration  
 chat = telegram()
 
-comm_method = 'chat' # 'mail' or 'chat'
+comm_method = config.comm_method 
 send_messages = True
 
 ### Command prompt parameters  
@@ -106,13 +109,13 @@ try:
         exit(0)
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
-        comission_rate = 0.003
+        comission_rate = config.comission_rate_bittrex
     elif exchange_abbr == 'bina': 
         exchange = 'binance' 
-        comission_rate = 0.001
+        comission_rate = config.comission_rate_binance
     elif exchange_abbr == 'bmex': 
         exchange = 'bitmex' 
-        comission_rate = 0
+        comission_rate = config.comission_rate_bitmex
         
     market = argv[3].upper()
     try:
@@ -169,25 +172,25 @@ sl_target = price_curr*sl
 price_entry = price_curr
 
 #### Gmail login and pass (if used) 
-fromaddr = "fromaddress@gmail.com"    # replace to a proper address 
-toaddr = "to@address.com"    # replace to a proper address 
-email_passw = "your_gmail_pass"
+fromaddr = config.fromaddr   # replace to a proper address 
+toaddr = config.toaddr    # replace to a proper address 
+email_passw = config.email_passw
 
 ################################ Config - part II ############################################
 ### Intervals and timers in seconds  
 
-sleep_timer = 60 #30                             # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
-sleep_timer_buyback = sleep_timer       # Sleep timer for buybacks 
-sleep_sale = 30                                     # Sleep timer for sell orders to be filled 
-flash_crash_ind = 0.5                            # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
+sleep_timer = config.sleep_timer                                    # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
+sleep_timer_buyback = config.sleep_timer_buyback      # Sleep timer for buybacks 
+sleep_sale = config.sleep_sale                                      # Sleep timer for sell orders to be filled 
+flash_crash_ind = config.flash_crash_ind                      # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
 ## Interval and number of checks to get current (last) prices 
-steps_ticker = 3 
-sleep_ticker = 10               # so that ticker in total takes 30 seconds 
+steps_ticker = config.steps_ticker  
+sleep_ticker = config.sleep_ticker            
 
 ## Steps and timer for buybacks 
-candle_steps = 80               # 100 for 5 min, 80 for 4
-candle_sleep = 2.8              # Tested, 3 sec lead to having ~5 min 30 sec in between 
+candle_steps = config.candle_steps         
+candle_sleep = config.candle_sleep       
 
 sleep_timer = int(sleep_timer/speedrun)
 sleep_sale = int(sleep_sale/speedrun)
@@ -198,11 +201,11 @@ candle_steps = int(candle_steps/speedrun)
 cancel_buyback = False 
 
 ### Bitmex margin 
-bitmex_margin = 3    # size of margin on bitmex, minor for now 
+bitmex_margin = config.bitmex_margin    # size of margin on bitmex, minor for now 
 
 # Time analysis candles length 
-td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
-td_period_extended = '1d'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
+td_period = config.td_period   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
+td_period_extended = config.td_period_extended   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
 
 ### Starting variables  
 main_curr_from_sell = 0     
@@ -699,7 +702,11 @@ def sell_orders_info():
             alt_sold_total = limit_sell_amount
             price_exit = get_last_price(market)
             if exchange == 'bitmex': 
-                main_curr_from_sell = contracts_start/price_exit   
+                if market == 'USD-BTC': 
+                    main_curr_from_sell = contracts_start/price_exit
+                else: 
+                    main_curr_from_sell = contracts_start*price_exit
+
     except: 
         err_msg = traceback.format_exc()
         comm_string = 'Could not het sell orders history from {} on {}. Reason: {}. Check the results'.format(market, exchange, err_msg)
@@ -716,7 +723,7 @@ def sell_orders_outcome():
         total_gained = float(main_curr_from_sell) - float(value_original) - float(commission_total)
         
         # Here division by zero error handling
-        if float(value_original)  > 0: 
+        if float(value_original)  != 0: 
             total_gained_perc = 100*float(total_gained)/float(value_original)   
         else: 
             total_gained_perc = 0 
@@ -741,12 +748,13 @@ def sell_orders_outcome():
         
         lprint(['Total from all sales', main_curr_from_sell, 'total commission', commission_total])
         lprint(['Profit ', total_gained, ':', round(total_gained_perc, 2), '%']) 
-        # Send the notification about results
-        send_notification('Trade finished: ' + str(round(total_gained_perc, 2)) + '% ' + txt_result, market + ': Total ' + str(trade) + ' gained from all sales: ' + 
-                          str(main_curr_from_sell) + '. Commission paid: ' + str(commission_total) + '. Trade outcome: ' + percent_gained + '% ' + txt_result + '.')
+        # Send the notification about results   price_entry
+        msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  percent_gained , txt_result, str(price_entry), str(price_exit))
+        send_notification('Finished', msg_result) 
+        
         # Update the xls register 
         try:
-            wb = load_workbook("Trade_history.xlsx")
+            wb = load_workbook(config.trade_hist_filename)
             ws = wb['BOT']
             new_line = [trade_time, trade, currency, alt_sold_total, price_curr, price_exit, main_curr_from_sell, total_gained, percent_gained, simulation]
             ws.append(new_line)
@@ -755,7 +763,7 @@ def sell_orders_outcome():
             index_row = "{}:{}".format(max_row, max_row) 
             for cell in ws[index_row]:
                 cell.font = Font(name='Arial', size=10)
-            wb.save("Trade_history.xlsx")
+            wb.save(config.trade_hist_filename)
             
             #if platform_run != 'Windows':  #uncomment if needed 
             #    copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
@@ -798,7 +806,7 @@ def stop_reconfigure(mode = None):
         ''' 
         # New logic: return the TD direction of the last candle per td_interval 
         price_direction_move = bars_4h['td_direction'].iloc[-1]      # return 'up' or 'down' 
-        print "CHECK: short flag", short_flag, "price_direction", price_direction_move
+        #print "CHECK: short flag", short_flag, "price_direction", price_direction_move   #DEBUG
         
         if (not short_flag and price_direction_move == 'down') or (short_flag and price_direction_move == 'up'): 
             price_flip_upd = True 
@@ -1137,7 +1145,7 @@ def sell_now(at_price):
                 sell_portion = balance_available
              
         else: # if we are in the simulation mode 
-            contracts =  get_last_price(market) * simulation_balance
+            contracts =  price_entry * simulation_balance    #get_last_price(market) * simulation_balance
             contracts_start = contracts
             value_original = simulation_balance
     else: # for other exchanges     
@@ -1836,10 +1844,7 @@ try:
             rows = query(sql_string)
     
     # If telegram stop - finalise and exit 
-    else: 
-        # Delete buyback from the DB 
-        sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
-        rows = query(sql_string)
+    else:  
         logger.close_and_exit()
     
 except KeyboardInterrupt:

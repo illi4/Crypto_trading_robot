@@ -6,13 +6,16 @@ import time
 # Import exchanges libraries in case coinigy api fails to get a price 
 from exchange_func import getticker
 
+# Config 
+import config 
+
 # Coinigy functions 
 class coinigy(object):
     def __init__(self):
-        self.public = ['price', 'balances']
-        self.key = 'key'    # put your key here 
-        self.secret = 'secret'  # put your secret key here 
-        self.content = "application/json"
+        self.public = ['price', 'balances', 'market_name']
+        self.key = config.coinigy_key
+        self.secret = config.coinigy_secret
+        self.content = "application/json"     
         
     def price(self, exchange, ticker): 
         count = 0 
@@ -153,17 +156,18 @@ class coinigy(object):
             str_balance += '\n'  
         
         try:
-            response = urllib2.urlopen('http://api.fixer.io/latest?base=USD&symbols=AUD') 
-            usd_aud = json.load(response)['rates']['AUD']   
+            request_exchange_rate = 'http://api.fixer.io/latest?base=USD&symbols=' + config.local_curr
+            response = urllib2.urlopen(request_exchange_rate) 
+            usd_local = json.load(response)['rates'][config.local_curr]   
         except: 
-            usd_aud = 1.254      
+            usd_local = config.local_curr_fixed  
         
         if usdte == 0: 
             usdte = self.price('BTRX', 'USDT/BTC')
             
         balance_usdt_val = balance_total_btc_val * float(usdte)
-        balance_aud_val = round(usd_aud*balance_usdt_val, 1) 
-        str_balance += 'Value in BTC: {}\nValue in AUD: ~{}'.format(round(balance_total_btc_val, 3), balance_aud_val)            
+        balance_aud_val = round(usd_local*balance_usdt_val, 1) 
+        str_balance += 'Value in BTC: {}\nValue in {}: ~{}'.format(round(balance_total_btc_val, 3), config.local_curr, balance_aud_val)            
         return str_balance         
             
 

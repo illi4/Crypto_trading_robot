@@ -39,19 +39,10 @@ dir_to = '/home/illi4/Dropbox/Exchange/price_log'
 
 # List of cryptos   
 markets_list = [
-    #['BTC-CTR' , 'BINA'], 
-    #['BTC-MUSIC' , 'BTRX'], 
-    #['USDT-USD', 'KRKN'], 
-    #['USDT-BTC', 'BTRX'], 
-    #['USDT-BTC' , 'BINA'], 
-    #['BTC-LTC' , 'BTRX'], 
-    #['BTC-DASH' , 'BTRX'], 
-    #['BTC-MUSIC' , 'BTRX'], 
-    #['BTC-XMR' , 'BTRX'], 
-    #['BTC-NEO' , 'BTRX'], 
-    #['BTC-ETH' , 'BTRX'], 
-    #['BTC-POWR' , 'BTRX'],
-    #['USD-BTC' , 'BITS'],     
+    ['BTC-CTR' , 'BINA'], 
+    ['BTC-MUSIC' , 'BTRX'], 
+    ['USDT-USD', 'KRKN'], 
+    ['USDT-BTC', 'BTRX'], 
     ['XBT-USD' , 'BMEX'], 
     ['XRPH18', 'BMEX'], 
     ['ETHH18', 'BMEX'], 

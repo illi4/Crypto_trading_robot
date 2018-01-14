@@ -50,6 +50,9 @@ coinigy = coinigy()
 
 ################################ Config - part I ############################################
 
+### Import a configuration file 
+import config 
+
 ### TD analysis library
 import tdlib as tdlib
 td_info = tdlib.tdlib()
@@ -61,21 +64,21 @@ decimal.getcontext().rounding = 'ROUND_DOWN'
 print "Running..."
 
 ### Interval and number of checks to get current (last) prices 
-steps_ticker = 3 
-sleep_ticker = 10 # So that ticker in total takes 30 seconds 
+steps_ticker = config.steps_ticker 
+sleep_ticker = config.sleep_ticker      # So that ticker in total takes 30 seconds 
 
 ### Sleep timer in seconds for buy task. changed to 3 minutes because orders were filling way too quickly at a higher price
-sleep_timer = 180  #180 is 3 min  
+sleep_timer = config.buy_sleep_timer   
 
 ### Orders sequence for a market price calculation 
-orders_check = 5 
+orders_check = config.orders_check 
 
 ### Steps and timer for buybacks 
-candle_steps = 100
-candle_sleep = 2.8 # Tested, 3 sec lead to having ~5 min 30 sec in between  
+candle_steps = config.candle_steps
+candle_sleep = config.candle_sleep     # Tested, 3 sec lead to having ~5 min 30 sec in between  
 
 ### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
-speedrun = 1 #1   
+speedrun = config.speedrun
 
 sleep_timer = int(sleep_timer/speedrun)
 sleep_ticker = int(sleep_ticker/speedrun)
@@ -83,17 +86,17 @@ candle_steps = int(candle_steps/speedrun)
 
 ### Comms 
 send_messages = True 
-comm_method = 'chat'
+comm_method = config.comm_method 
 chat = telegram()
 
 ### Default flag for shorting. The bot can be used to short on bitmex, not only go long 
 short_flag = False 
-bitmex_margin = 3   # size of margin on bitmex, minor for now
+
+bitmex_margin = config.bitmex_margin   # size of margin on bitmex, minor for now
 
 # Time analysis candles length 
-td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
-td_period_extended = '1d'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
-
+td_period = config.td_period   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
+td_period_extended = config.td_period_extended   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)    
 
 ### Platform
 platform = platform.platformlib()
@@ -160,15 +163,16 @@ try:
         print 'Incorrect exchange specified (should be btrx, bina, or bitmex)\n\n'
         send_notification('Incorrect exchange', 'Incorrect exchange specified')
         exit(0)
+        
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
-        comission_rate = 0.003      # rate is 0.25% + 0.05% for contingency in roundings etc 
+        comission_rate = config.comission_rate_bittrex
     elif exchange_abbr == 'bina': 
         exchange = 'binance' 
-        comission_rate = 0.0015       # rate is 0.1% + 0.05% for contingency in roundings etc 
+        comission_rate = config.comission_rate_binance
     elif exchange_abbr == 'bmex': 
         exchange = 'bitmex' 
-        comission_rate = 0          # no commissions as such when opening a position 
+        comission_rate = config.comission_rate_bitmex
 
     # Main currency (e.g. BTC) 
     market = argv[3].upper()
@@ -907,7 +911,7 @@ if sum_quantity > 0:
     if (wf_run_mode != 's') and (wf_run_mode != 'sns'):
         try: 
             date_time = strftime("%Y-%m-%d %H:%M", localtime())
-            wb = load_workbook("Trade_history.xlsx")
+            wb = load_workbook(config.trade_hist_filename)
             ws = wb['Entry_points']
             if exchange == 'bitmex': 
                 new_line = [date_time, 'XBT', avg_price, sum_quantity, sum_paid]
@@ -920,7 +924,7 @@ if sum_quantity > 0:
             for cell in ws[index_row]:
                 cell.font = Font(name='Arial', size=10)
             #
-            wb.save("Trade_history.xlsx")
+            wb.save(config.trade_hist_filename)
             ''' 
             # Used locally 
             if platform_run != 'Windows': 

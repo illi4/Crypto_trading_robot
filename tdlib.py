@@ -3,8 +3,13 @@ from time import localtime, strftime
 from sys import exit, argv
 import pandas as pd 
 
+# Config file 
+import config 
+
 import warnings
 warnings.filterwarnings("ignore")
+
+time_delta = config.timedelta
 
 # TD analysis
 class tdlib(object):
@@ -21,7 +26,7 @@ class tdlib(object):
         except: 
             return None 
         transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
-        transactions_all.index = transactions_all.index + pd.Timedelta('11:00:00')  # convert to Sydney time 
+        transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
         transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records
         
         bars = transactions.price.resample(period, base = 7).ohlc()   

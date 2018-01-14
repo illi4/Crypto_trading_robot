@@ -7,7 +7,7 @@ import time
 import json
 from time import localtime, strftime
 import math
-
+import traceback
 import decimal
 from decimal import Decimal, getcontext
 
@@ -16,29 +16,33 @@ import ccxt
 from exchanges.bittrex.client import bittrex # bittrex module with api and success flag check by default
 
 ################################ Config ############################################
+# Config file 
+import config 
 
 # Decimal precision
 decimal.getcontext().prec = 20
 
 # Initialising clients with api keys 
 
-api_bittrex = bittrex('KEY', 'SECRET')
+api_bittrex = bittrex(config.bittrex_apikey, config.bittrex_secret)
 
 binance = ccxt.binance ({
-    'apiKey': 'KEY',
-    'secret': 'SECRET',
-})
-
-bitstamp = ccxt.bitstamp ({     # Not ready to use 
-    'apiKey': 'KEY',
-    'secret': 'SECRET',
-    'uid': 'UID', 
+    'apiKey': config.binance_apikey,
+    'secret': config.binance_secret,
 })
 
 bitmex = ccxt.bitmex ({
-    'apiKey': 'KEY',
-    'secret': 'SECRET',
+    'apiKey': config.bitmex_apikey,
+    'secret': config.bitmex_secret,
 })
+
+''' 
+bitstamp = ccxt.bitstamp ({     # Not ready for use 
+    'apiKey': '-',
+    'secret': '-',
+    'uid': '-', 
+})
+'''
  
 ################################ Functions ############################################
 
