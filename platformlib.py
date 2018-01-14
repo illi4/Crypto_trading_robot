@@ -14,8 +14,8 @@ class platformlib(object):
             cmd_init_buy = 'start cmd /K python smart_buy.py '
         else: 
             # Nix
-            cmd_init = 'gnome-terminal --tab --profile Active -e "python ' + self.nix_home_folder + 'robot.py '   # we will also need to add params and close with " later 
-            cmd_init_buy = 'gnome-terminal --tab --profile Active -e "python ' + self.nix_home_folder + 'smart_buy.py '  # --profile Active could be added
+            cmd_init = config.cmd_init
+            cmd_init_buy = config.cmd_init_buy
         
         return platform_run, cmd_init, cmd_init_buy
 

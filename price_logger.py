@@ -20,6 +20,9 @@ from telegramlib import telegram # my lib to work with Telegram
 import platformlib as platform  # detecting the OS and assigning proper folders 
 from coinigylib import coinigy
 
+# Config file 
+import config 
+
 ################################ Functions ############################################
 def append_line(data, filename):    
     with open(filename, 'ab') as csvfile:
@@ -34,25 +37,11 @@ platform = platform.platformlib()
 platform_run, cmd_init, cmd_init_buy = platform.initialise()     
         
 # Directories to copy (if needed - I am using this for backing up data) 
-dir_from = '/home/illi4/Robot/price_log'
-dir_to = '/home/illi4/Dropbox/Exchange/price_log'
+dir_from = config.dir_from
+dir_to = config.dir_to
 
 # List of cryptos   
-markets_list = [
-    ['BTC-CTR' , 'BINA'], 
-    ['BTC-MUSIC' , 'BTRX'], 
-    ['USDT-USD', 'KRKN'], 
-    ['USDT-BTC', 'BTRX'], 
-    ['XBT-USD' , 'BMEX'], 
-    ['XRPH18', 'BMEX'], 
-    ['ETHH18', 'BMEX'], 
-    ['BCHF18', 'BMEX'], 
-    ['DASHH18', 'BMEX'], 
-    ['ETC7D', 'BMEX'], 
-    ['LTCH18', 'BMEX'], 
-    ['XMRH18', 'BMEX'], 
-    ['ZECH18', 'BMEX']    
-]
+markets_list = config.markets_list
 
 ################################ Code ############################################
 

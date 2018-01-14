@@ -46,6 +46,14 @@ timedelta = '11:00:00'                                         # convert price i
 local_curr = 'AUD'                                               # symbol to change the price to your local currency (for balance command)    
 local_curr_fixed = 1.25                                       # exchange from USD to your local in case the url request does not work   
 
+# Directories to copy (if needed - I am using this for backing up data on Dropbox) 
+dir_from = '/home/illi4/Robot/price_log'
+dir_to = '/home/YOUR_FOLDER'
+
+# Commands to start a terminal in your *nix environment
+cmd_init = 'gnome-terminal --tab -e "python ' + nix_folder + 'robot.py '                       # do not remove this space in the end
+cmd_init_buy = 'gnome-terminal --tab -e "python ' + nix_folder + 'smart_buy.py '       # do not remove this space in the end
+
 ############### API KEYS ######################## (!) Replace with your values 
 
 # Initialising clients with api keys 
@@ -77,3 +85,26 @@ telegram_check_sec = 1
 comission_rate_bittrex = 0.003               # rate is 0.25% + 0.05% for contingency in roundings etc 
 comission_rate_binance = 0.001            # rate is 0.1% + 0.05% for contingency in roundings etc 
 comission_rate_bitmex = 0                     # no commissions as such when opening a position   
+
+######## Price logger - which prices to collect ###########
+markets_list = [
+    #['BTC-CTR' , 'BINA'], 
+    #['BTC-MUSIC' , 'BTRX'], 
+    #['USDT-USD', 'KRKN'], 
+    #['USDT-BTC', 'BTRX'], 
+    #['USDT-BTC' , 'BINA'], 
+    #['BTC-LTC' , 'BTRX'], 
+    #['BTC-DASH' , 'BTRX'], 
+    #['BTC-MUSIC' , 'BTRX'], 
+    #['BTC-XMR' , 'BTRX'], 
+    #['BTC-NEO' , 'BTRX'], 
+    #['BTC-ETH' , 'BTRX'], 
+    #['BTC-POWR' , 'BTRX'],
+    #['USD-BTC' , 'BITS'],     
+    ['XBT-USD' , 'BMEX'], 
+    ['XRPH18', 'BMEX'], 
+    ['ETHH18', 'BMEX'], 
+    ['BCHF18', 'BMEX'], 
+    ['DASHH18', 'BMEX'], 
+    ['ETC7D', 'BMEX'], 
+]
