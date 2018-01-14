@@ -702,8 +702,8 @@ while buy_flag and approved_flag:
                         if bars_extended['td_direction'].iloc[-1] == 'down': 
                             short_flag = True 
                         else: 
-                            short_flag = False 
-                            
+                            short_flag = False   
+                        
                 # Different conditions depending on long / short: 
                 if not short_flag: # LONGS  
                     check_value = bars['high'].iloc[-2] * (1 + diff_threshold)
@@ -971,6 +971,11 @@ if wf_id is not None:
         sql_string = "DELETE FROM workflow WHERE wf_id = {}".format(wf_id)
         rows = query(sql_string)
         
+        # The short_flag can be inconsistent with the original record if the fullta mode (automatic) was used and the direction flipped - handling this here
+        if (not short_flag and (float(wf_info_tp) < float(wf_info_sl))) or (short_flag and (float(wf_info_tp) > float(wf_info_sl)) ):
+            lprint(['Flipping TP and SL values in line with the direction. Short_flag:' , short_flag])    
+            wf_info_tp, wf_info_sl = wf_info_sl, wf_info_tp
+                 
         print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_market, wf_info_price, wf_info_tp, wf_info_sl)
 
         # Launch in the same window 
