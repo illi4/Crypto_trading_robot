@@ -711,7 +711,6 @@ while buy_flag and approved_flag:
                     lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
                         fixed_price_starter = True 
-                        chat.send("Position buy initiated based on time analysis for " + market + ". Direction: long.") 
                     else: 
                         lprint(["> Long buy condition not met"])
                 else: #SHORTS 
@@ -720,10 +719,10 @@ while buy_flag and approved_flag:
                     lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value):  
                         fixed_price_starter = True 
-                        chat.send("Position buy initiated based on time analysis for " + market + ". Direction: long.") 
                     else: 
                         lprint(["> Short buy condition not met"])
             
+      
             
         ### If meeting conditions for fixed price - get the current   
         if fixed_price_flag and fixed_price_starter: 
@@ -897,8 +896,14 @@ if sum_quantity > 0:
         # If simulation
         sum_paid = source_position
     
+    # Description
+    if short_flag: 
+        direction_desc = 'short'
+    else: 
+        direction_desc = 'long'
+    
     if exchange == 'bitmex': 
-        comm_string = "{}: buy orders completed on {}, opened a position for {} contracts.".format(market, exchange, sum_quantity)
+        comm_string = "{}: buy orders completed on {}, opened a position for {} contracts. Direction: {}".format(market, exchange, sum_quantity, direction_desc)
     else: 
         comm_string = "{}: buy orders completed on {} at the total amount of {} and the average price {}.\nBought {} {}.".format(market, exchange, sum_paid, avg_price, sum_quantity, currency)
     send_notification('Bought', comm_string)
@@ -993,7 +998,6 @@ if wf_id is not None:
                 
     except:
         chat.send('Could not launch sell task in the workflow for ' + market + ' on ' + exchange + ' or the task finished with an error')
-
 
 
 

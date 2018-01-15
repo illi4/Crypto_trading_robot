@@ -728,10 +728,11 @@ def sell_orders_outcome():
         else: 
             total_gained_perc = 0 
         
-        if total_gained_perc < 0: 
-            txt_result = 'lost'  
-        else: 
+        # Depending on the trade direction 
+        if (short_flag and (total_gained_perc < 0)) or (not short_flag and (total_gained_perc >= 0)): 
             txt_result = 'gained'
+        else: 
+            txt_result = 'lost'  
         
         # Average exit price (value/quantity)
         if exchange != 'bitmex':   
@@ -748,7 +749,9 @@ def sell_orders_outcome():
         
         lprint(['Total from all sales', main_curr_from_sell, 'total commission', commission_total])
         lprint(['Profit ', total_gained, ':', round(total_gained_perc, 2), '%']) 
-        # Send the notification about results   price_entry
+        
+        # Send the notification about results    
+        # To improve: if bitmex is used, margin should be accounted for 
         msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  percent_gained , txt_result, str(price_entry), str(price_exit))
         send_notification('Finished', msg_result) 
         
@@ -806,9 +809,12 @@ def stop_reconfigure(mode = None):
         ''' 
         # New logic: return the TD direction of the last candle per td_interval 
         price_direction_move = bars_4h['td_direction'].iloc[-1]      # return 'up' or 'down' 
+        price_direction_move_previous = bars_4h['td_direction'].iloc[-2]      # return 'up' or 'down' 
         #print "CHECK: short flag", short_flag, "price_direction", price_direction_move   #DEBUG
         
-        if (not short_flag and price_direction_move == 'down') or (short_flag and price_direction_move == 'up'): 
+        # We will be considering that there is a price flip if we have a candle in setup with different colour which is followed by the same colour 
+        if ((not short_flag and price_direction_move == 'down' and price_direction_move_previous == 'down') 
+        or (short_flag and price_direction_move == 'up' and price_direction_move_previous == 'up')): 
             price_flip_upd = True 
             #print ">>>>>> Price_flip_upd", price_flip_upd #DEBUG 
 
@@ -1856,4 +1862,3 @@ except KeyboardInterrupt:
         logger.close_and_exit()
     except: 
         print 'Logs already closed' 
-
