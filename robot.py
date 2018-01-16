@@ -217,7 +217,7 @@ contracts_start = 0
 stopped_mode = '' 
 short_flag = False # whether we are shorting, applicable for bitmex 
 bitmex_sell_avg = 0 # for bitmex price averaging 
-price_flip = True # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period); will be True by default for non-td-data cases 
+price_flip = None # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period). None by default 
 price_exit = None 
 sl_extreme = None 
 
@@ -1528,6 +1528,9 @@ except:
     td_data_available = False 
     
 print "TD data availability:", td_data_available
+# Changing the flip flag to True if td data is not available 
+if not td_data_available: 
+    price_flip = True
 
 ### 6. Strategy and thresholds (for non-4H based action) 
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
