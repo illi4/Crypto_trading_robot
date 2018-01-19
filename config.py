@@ -9,8 +9,8 @@ bitmex_margin = 3               # margin you would like to use on bitmex
 speedrun = 1  
 
 # Robot
-sleep_timer = 60                                    # Generic sleep timer (robot). Applicable for the main monitoring loop and for the mooning procedure.
-sleep_timer_buyback = 300                  # Sleep timer for buybacks 
+sleep_timer = 30                                    # Generic sleep timer (robot). Applicable for the main monitoring loop and for the mooning procedure.
+sleep_timer_buyback = 60                  # Sleep timer for buybacks 
 sleep_sale = 30                                     # Sleep timer for sell orders to be filled 
 flash_crash_ind = 0.5                            # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
