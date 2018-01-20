@@ -10,7 +10,7 @@ speedrun = 1
 
 # Robot
 sleep_timer = 30                                    # Generic sleep timer (robot). Applicable for the main monitoring loop and for the mooning procedure.
-sleep_timer_buyback = 60                  # Sleep timer for buybacks 
+sleep_timer_buyback = 60                     # Sleep timer for buybacks 
 sleep_sale = 30                                     # Sleep timer for sell orders to be filled 
 flash_crash_ind = 0.5                            # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
@@ -29,7 +29,8 @@ candle_sleep = 2.8              # Tested, 3 sec lead to having ~5 min 30 sec in 
 #### Price analysis periods 
 # Time analysis candles length 
 td_period = '4h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
-td_period_extended = '1d'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)       
+td_period_extended = '9h'    # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)       
+td_period_ext_opposite = '12h'  # for buybacks in the different direction (e.g. initiating short after going long first) 
 
 #### Logins and passwords, comm method
 comm_method = 'chat'        # 'mail' or 'chat'
@@ -88,6 +89,7 @@ comission_rate_bitmex = 0                     # no commissions as such when open
 
 ######## Price logger - which prices to collect ###########
 markets_list = [
+    # Here are some examples 
     #['BTC-CTR' , 'BINA'], 
     #['BTC-MUSIC' , 'BTRX'], 
     #['USDT-USD', 'KRKN'], 

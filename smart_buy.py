@@ -530,9 +530,11 @@ if mode == 'now':
 # Checking 4H data availability 
 if mode == '4h' and not td_data_available: 
     print "TD data is unavailable, not possible to start the task"
+    chat.send("TD data is unavailable, not possible to start the task")
     logger.close_and_exit()
 if mode == 'fullta' and not td_data_available and not td_data_extended_available: 
-    print "TD data is unavailable, not possible to start the task"
+    print "Extended TD data is unavailable, not possible to start the task"
+    chat.send("Extended TD data is unavailable, not possible to start the task")
     logger.close_and_exit()
     
 ### Inserting in the sqlite db if started fine  
@@ -696,14 +698,17 @@ while buy_flag and approved_flag:
                     bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)   
                     
                     # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
-                    lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
                     if mode == 'fullta': 
                         bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5)   
                         if bars_extended['td_direction'].iloc[-1] == 'down': 
                             short_flag = True 
                         else: 
                             short_flag = False   
-                        
+                            
+                # If extended is used - print info         
+                if mode == 'fullta': 
+                    lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
+                
                 # Different conditions depending on long / short: 
                 if not short_flag: # LONGS  
                     check_value = bars['high'].iloc[-2] * (1 + diff_threshold)
@@ -716,7 +721,7 @@ while buy_flag and approved_flag:
                 else: #SHORTS 
                     check_value = bars['low'].iloc[-2] * (1 - diff_threshold)
                     lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
-                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
+                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar low - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value):  
                         fixed_price_starter = True 
                     else: 

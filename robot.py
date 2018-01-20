@@ -206,6 +206,7 @@ bitmex_margin = config.bitmex_margin    # size of margin on bitmex, minor for no
 # Time analysis candles length 
 td_period = config.td_period   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
 td_period_extended = config.td_period_extended   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
+td_period_ext_opposite = config.td_period_ext_opposite    # for buybacks in the different direction (e.g. initiating short after going long first) 
 
 ### Starting variables  
 main_curr_from_sell = 0     
@@ -456,10 +457,10 @@ def check_bb_flag():
 def buy_back(price_base): 
     global bb_id, market, exchange_abbr, exchange, sleep_timer_buyback
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
-    global short_flag, td_period, td_period_extended
+    global short_flag, td_period, td_period_extended, td_period_ext_opposite
     
     direction = None # to return information on the direction of the new detected trend 
-    bars_extended_avail = None 
+    bars_check_avail = None 
 
     ### Greetings (for logs readability) 
     lprint(["###################### BUY_BACK ###########################"])
@@ -547,29 +548,31 @@ def buy_back(price_base):
     else: 
         # Update to set stops according to 4H candles and TD 
         if td_first_run: 
-            td_first_run = False 
-            bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10, short_flag)     
             time_hour = time.strftime("%H")
-            try: 
-                bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 10, short_flag)   
-                bars_extended_avail = True 
-            except: 
-                bars_extended_avail = False 
             
         while flag_reb_c: 
             # Checking the need to update 
             time_hour_update = time.strftime("%H")
-            if (time_hour_update <> time_hour): 
-                # Updating the current hour and the TD values 
+            if (time_hour_update <> time_hour) or td_first_run:
+                # If this is the first run 
+                if td_first_run: 
+                    td_first_run = False 
+
+                # Updating time 
                 time_hour = time_hour_update
+                # Updating TD values 
                 bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, short_flag)     
                 try: 
                     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 5, short_flag)   
-                    bars_extended_avail = True 
+                    bars_check_avail = True 
                 except: 
-                    bars_extended_avail = False 
-                
-        
+                    bars_check_avail = False 
+                try: 
+                    bars_ext_opposite = td_info.stats(market, exchange_abbr, td_period_ext_opposite, 80000, 10, short_flag)   
+                    bars_check_avail = True 
+                except: 
+                    bars_check_avail = False 
+                    
             # Check if we need to cancel 
             stop_bback = check_bb_flag()
             if stop_bback: 
@@ -578,7 +581,7 @@ def buy_back(price_base):
             
             # Checking time elapsed from the start of buyback 
             time_elapsed = (math.ceil(time.time() - time_bb_initiated ))/60    
-
+            
             # Getting the current price and showing info on potential longs or potential shorts 
             price_upd = get_last_price(market)
             if bars['td_direction'].iloc[-2] == 'up': #LONGS potential 
@@ -599,23 +602,37 @@ def buy_back(price_base):
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
                 rows = query(sql_string)
             
-            # Checking if we should buy back: this happens when the price is above a bullish setup candle; opposite for shorts 
+            # Checking if we should buy back 
+            # Check longs 
             if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > (bars['high'].iloc[-2])*(1 + diff_threshold)):      # switching to long    
-                if (bars_extended_avail and bars_extended['td_direction'].iloc[-1] == 'up') or (bars_extended_avail == False): 
+                # Depending on the short flag 
+                if not short_flag:  # same direction - checking bars_extended 
+                    bars_check = bars_extended
+                else:   # different direction - checking a larger period 
+                    bars_check = bars_ext_opposite
+                # Checking the conditions                 
+                if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'up') or (bars_check_avail == False): 
                     bback_result = True 
                     direction = 'up'
                     flag_reb_c = False 
                     lprint(["TD buyback initiated on the long side"])
-                    if bars_extended_avail == False: 
+                    if bars_check_avail == False: 
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
-                
+            
+            # Check shorts  
             if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 60) and (price_upd < (bars['low'].iloc[-2])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
-                if (bars_extended_avail and bars_extended['td_direction'].iloc[-1] == 'down') or (bars_extended_avail == False): 
+                # Depending on the short flag 
+                if short_flag:  # same direction - checking bars_extended 
+                    bars_check = bars_extended
+                else:     # different direction - checking a larger period 
+                    bars_check = bars_ext_opposite
+                # Checking the conditions      
+                if (bars_check_avail and bars_check_avail['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
                     bback_result = True 
                     direction = 'down'
                     flag_reb_c = False 
                     lprint(["TD buyback initiated on the short side"])
-                    if bars_extended_avail == False: 
+                    if bars_check_avail == False: 
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Sleeping 
