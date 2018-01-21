@@ -89,7 +89,7 @@ comission_rate_bitmex = 0                     # no commissions as such when open
 
 ######## Price logger - which prices to collect ###########
 markets_list = [
-    # Here are some examples 
+    # Here are some examples; the abbreviations and markets are consistent with coinigy 
     #['BTC-CTR' , 'BINA'], 
     #['BTC-MUSIC' , 'BTRX'], 
     #['USDT-USD', 'KRKN'], 
@@ -110,3 +110,8 @@ markets_list = [
     ['DASHH18', 'BMEX'], 
     ['ETC7D', 'BMEX'], 
 ]
+
+### Reference markets for BTC on bitmex (e.g. if we want to calculated the indicators based on values from a different exchange) 
+btc_market_reference = False #True 
+market_ref = 'BTC-USD'
+exchange_abbr_ref = 'bitf'

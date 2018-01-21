@@ -16,7 +16,7 @@ class tdlib(object):
     def __init__(self):
         self.public = ['stats']
         
-    def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10, short_flag = False):
+    def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10, short_flag = False, market_ref = None, exch_use_ref = None):
         # example period = '5min' 
         filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'
         #print "Short_flag", short_flag 
@@ -25,13 +25,27 @@ class tdlib(object):
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
         except: 
             return None 
+            
         transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
         transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
-        transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records
-        
+        transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records 
         bars = transactions.price.resample(period, base = 7).ohlc()   
         
-        # Initial conditions 
+        # Added for cases when we have a different reference exchange / market for calculating the TD 
+        if (market_ref is not None) and (exch_use_ref is not None): 
+            bars_prices_original = bars  # storing the price data so that we will replace it later
+            # Grab the other file 
+            filename = 'price_log/' + market_ref + '_' + exch_use_ref.lower() + '.csv'
+            try: 
+                transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
+            except: 
+                return None 
+            transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
+            transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
+            transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records 
+            bars = transactions.price.resample(period, base = 7).ohlc()   
+        
+        # Initial conditions, working through TD 
         bearish_flip = False 
         bullish_flip = False 
         setup_up = 0 
@@ -64,9 +78,10 @@ class tdlib(object):
             direction_down = True 
             td_down_1_high = bars['high'].iloc[0]
          
+         
+         
         ## Getting through an array (data) and calculating values 
-        for i in range(0 + 6, size): # 6 candles are needed for detecting the first price flip 
-            
+        for i in range(0 + 6, size): # 6 candles are needed for detecting the first price flip     
             ## Price flip 
             bearish_flip = False 
             bullish_flip = False 
@@ -178,6 +193,14 @@ class tdlib(object):
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
             bars['move_extreme'].iloc[i] = move_extreme
         
+        
+        ### Replacing prices if we have a reference in a changed bars array 
+        if (market_ref is not None) and (exch_use_ref is not None): 
+            bars['open'] = bars_prices_original['open']
+            bars['high'] = bars_prices_original['high']
+            bars['low'] = bars_prices_original['low']
+            bars['close'] = bars_prices_original['close']
+            
         # Changed this logic to return current TD Setup colour as well 
         ''' 
         # Return all except for the last one because we need info on the whole period not just the part 
@@ -187,5 +210,6 @@ class tdlib(object):
         else: 
             return bars.tail(tail)[:-1]    
         ''' 
+        
         return bars.tail(tail)
     

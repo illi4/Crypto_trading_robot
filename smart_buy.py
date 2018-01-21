@@ -102,6 +102,11 @@ td_period_extended = config.td_period_extended   # possible options are in line 
 platform = platform.platformlib()
 platform_run, cmd_init, cmd_init_buy = platform.initialise() 
 
+# Market reference for BTC 
+btc_market_reference = config.btc_market_reference
+market_ref = None  
+exchange_abbr_ref = None 
+
 ################################ Functions - part I ############################################
 
 ##################### Price comparison 
@@ -223,6 +228,13 @@ try:
     if exchange != 'bitmex' and short_flag: 
         lprint(["Shorts are not supported on the exchange", exchange])
     
+    ### Handle the reference to a different set of prices (from finex) in the case of usd-btc and bitmex 
+    if market == 'USD-BTC' and exchange == 'bitmex' and btc_market_reference:        # put in the config 
+        market_ref = config.market_ref
+        exchange_abbr_ref = config.exchange_abbr_ref
+        print "Reference market {} on {}".format(market_ref, exchange_abbr_ref) 
+
+    
     ### Greetings (for logs readability) 
     lprint(["###################### SMART_BUY ###########################"])
         
@@ -251,8 +263,8 @@ time.sleep(int(30/speedrun))
 
 # TD data availability 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10)    
-    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 50000, 10)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10, False, market_ref, exchange_abbr_ref)    
+    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 50000, 10, False, market_ref, exchange_abbr_ref)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -695,11 +707,11 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
-                    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5)   
+                    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, False, market_ref, exchange_abbr_ref)   
                     
                     # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
                     if mode == 'fullta': 
-                        bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5)   
+                        bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5, False, market_ref, exchange_abbr_ref)   
                         if bars_extended['td_direction'].iloc[-1] == 'down': 
                             short_flag = True 
                         else: 
