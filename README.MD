@@ -2,12 +2,20 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by the Wall Street. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, bitmex.
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by the Wall Street. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, and bitmex.
 
-Note that this is not a fully automated bot which works automatically all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
+Note that this is not a fully automated bot which works with no intervention all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
 
-However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 1 day) and will open / close long and short positions (shorts are supported on bitmex only). 
-The image below illustrates the logic: 
+However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot on for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 1 day) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
+- Price action is analysed on 4-hour and 9-hour intervals 
+- In 'fullta' mode, smart_buy opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus some contingency configured in the scripts). 
+- When the job is running, the position can be stopped if: 
+    * There is a price flip in the opposite direction on 4h, and the current 4h starts trading beyond the previous one. 
+    * There is an extreme move piercing through the whole price setup starting from the first.  
+    * There is an exhaustion nine which is followed by price dropping (or going above in shorts) the nine's low (high in shorts). 
+- After closing a position, the automatic buyback logic is equivalent to buying in fullta mode and starting a task from there. 
+    
+The image below illustrates some of this logic: 
 
 ![candles_logic](images/candles_upd_z.png?raw=true "Candles_logic")
 
@@ -141,7 +149,7 @@ Open long contracts for BTC on bitmex on the confirmation of bullishness on 4-ho
 
 ### Using price_logger to mitigate the risk of USDT crashing hard 
 
-I genuinely believe that USDT (USD Tether) is a ticking time bomb which will burst one day. However, I had been using it for a while due to its convenience. In order to protect myself from a sudden collapse of this token, I added a piece of code in the price_logger script which monitors the usdt-usd exchange rate (on Kraken) and buys BTC for all the available USDT when USDT collapses (USDT-USD ratio 0.93 for more than 15 minutes which did not happen in the past few years). 
+I genuinely believe that USDT (USD Tether) is a ticking time bomb which will burst one day. However, I had been using it for a while due to its convenience (not anymore). In order to protect myself from a sudden collapse of this token, I added a piece of code in the price_logger script which monitors the usdt-usd exchange rate (on Kraken) and buys BTC for all the available USDT when USDT collapses (USDT-USD ratio 0.93 for more than 15 minutes which did not happen in the past few years). 
 
 I consider Tether a great instrument and a perfect tool for the provision of better liquidity (especially for alts) - however, I am really  concerned with complete disregard of the community concerns by the Tether company and by Bitfinex. More and more tokens are being 'printed' while the community has to keep guessing what is going on. These companies should come up with a public statement and with transparent audits available to public. 
 
