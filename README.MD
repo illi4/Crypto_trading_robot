@@ -63,9 +63,11 @@ After registering your API keys on exchanges, you would need to specify them in 
 For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. I really recommend using Coinigy because otherwise you could be blocked from an exchange api even if you run a few robots without price logging. Generally, grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
 
 A few other tips which are important: 
-- Make sure that you specify a personal chat id (not a group chat id) in the Telegramlib.py
+- Make sure that you specify a personal chat id (not a group chat id) in the config.py
 - Default terminal to launch the commands is gnome-terminal. If you do not have it, either install it in your environment or change the commands in config.py. On my machine, I am also using a separate profile which specifies that the window should be kept open after a program exits so I see if anything goes wrong. See this [stackoverflow topic](https://stackoverflow.com/questions/4465930/prevent-gnome-terminal-from-exiting-after-execution) for details. 
-- If you are using Nix, ensure that you specify the path to scripts in config.py. 
+- If you are using Nix, ensure that you specify the correct path to scripts in config.py. 
+
+Note that bitmex has a testnet so that you can reconfigure tokens and try these scripts without risking any of your real crypto. 
 
 ### Setting a telegram bot 
 
