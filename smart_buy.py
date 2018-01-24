@@ -724,7 +724,6 @@ while buy_flag and approved_flag:
                 # If extended is used - print info         
                 if mode == 'fullta': 
                     lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
-                    print ">>> SHORT FLAG INFO", short_flag 
                 
                 # Different conditions depending on long / short: 
                 if not short_flag: # LONGS  

@@ -198,7 +198,15 @@ def bitmex_get_balance(currency):
     
 def bitmex_openorders(market): # returns my open orders, not initially available in ccxt 
     market = market_std(market)    
-    orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"open":True})} )
+    
+    retry = True 
+    while retry:  #  added a condition to handle nonce issues     
+        try: 
+            orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"open":True})} )
+            retry = False 
+        except: 
+            retry = True 
+    
     result = []
     for bitmex_order in orders: 
         temp_dict = {}
