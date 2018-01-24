@@ -704,7 +704,7 @@ while buy_flag and approved_flag:
             if mode == 'now':
                 fixed_price_starter = True 
             
-            ### Mode: 4h based on price action, or larger interval auto-based if fullta is used 
+            ### Mode: 4h based on price action, or larger interval auto-based if fullta is used           
             if mode == '4h' or mode == 'fullta':
                 time_hour_update = time.strftime("%H")
                 if (time_hour_update <> time_hour): 
@@ -713,17 +713,18 @@ while buy_flag and approved_flag:
                     time_hour = time_hour_update
                     bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, False, market_ref, exchange_abbr_ref)   
                     
-                    # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
-                    if mode == 'fullta': 
-                        bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5, False, market_ref, exchange_abbr_ref)   
-                        if bars_extended['td_direction'].iloc[-1] == 'down': 
-                            short_flag = True 
-                        else: 
-                            short_flag = False   
-                            
+                # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
+                if mode == 'fullta': 
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5, False, market_ref, exchange_abbr_ref)   
+                    if bars_extended['td_direction'].iloc[-1] == 'down': 
+                        short_flag = True 
+                    else: 
+                        short_flag = False   
+                                        
                 # If extended is used - print info         
                 if mode == 'fullta': 
                     lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
+                    print ">>> SHORT FLAG INFO", short_flag 
                 
                 # Different conditions depending on long / short: 
                 if not short_flag: # LONGS  
