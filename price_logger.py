@@ -154,9 +154,9 @@ while True:
     time_now = time.time() 
     time_diff = (math.ceil(time_now - start_time)) 
     # print "Cycle run time", time_diff
-    if time_diff > 20: 
+    if time_diff > 5: 
         time_sleep = 0 
     else: 
-        time_sleep = 20 - time_diff     # as we will be measuring USDT per minute and then comparing 15-min intervals 
+        time_sleep = 5 - time_diff     # as we will be measuring USDT per minute and then comparing 15-min intervals 
     
     time.sleep(time_sleep)  # so that the difference for usdt intervals is around a minute. There is ~ a sec per each element request 

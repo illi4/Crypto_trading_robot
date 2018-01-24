@@ -186,6 +186,10 @@ try:
     except: 
         trade = market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
         currency = 'BTC'
+        
+    # Handling potential issues with naming for bitmex (e.g. XRPH18-BTC is passed in the cmd)
+    if exchange == 'bitmex' and trade != 'USD' and currency == 'BTC': 
+        market = trade
     
     # New logger
     logger = logfile(market, 'buy')    
@@ -738,13 +742,21 @@ while buy_flag and approved_flag:
                         fixed_price_starter = True 
                     else: 
                         lprint(["> Short buy condition not met"])
-            
-      
-            
-        ### If meeting conditions for fixed price - get the current   
+     
+        ### If meeting conditions for fixed price - get the current price   
         if fixed_price_flag and fixed_price_starter: 
-            fixed_price = get_last_price(market)        
-            
+            # Changes - in fullta mode, analyse for the best price 
+            if (mode == 'fullta') or (mode == '4h'): 
+                # When we are long, on the enter we buy -> get the price from asks (the lowest ask (sell price) which is the first in the array)
+                # When we are short, on the enter we sell -> get the price from bids (the highest bid (buy price), which is the first in the array)
+                if not short_flag: #LONG
+                    fixed_price = float(getorderbook(exchange, market, 'asks')[0]['Rate'])
+                else: # SHORT   
+                    fixed_price = float(getorderbook(exchange, market, 'bids')[0]['Rate'])
+            # for other cases (not fullta or 4h mode) like now or breakout - just get the averaged ticker price 
+            else: 
+                fixed_price = get_last_price(market)        
+                
         ### Price conditions with floating price 
         if (fixed_price_flag != True) and (float_price_starter != True): 
             lprint(["Starting for the floating (market) price"])

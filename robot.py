@@ -227,6 +227,7 @@ sl_extreme = None
 sale_trigger = False  
 market_ref = None      # if we refer to a different exchange and market for td stats 
 exchange_abbr_ref = None 
+status_update = '' 
 
 ### Handle the reference to a different set of prices (from finex) in the case of usd-btc and bitmex 
 if market == 'USD-BTC' and exchange == 'bitmex' and btc_market_reference:        # put in the config 
@@ -246,9 +247,9 @@ else:
     diff_threshold = 0.055
 
 if strategy == 'btc': 
-    var_contingency = 0.0086    # 0.86% lower/higher than the previous 4H candle for btc  # previously was 0.75%
+    var_contingency = config.var_contingency_btc
 else: 
-    var_contingency = 0.01     # 1% lower/higher than the previous 4H candle for alts    
+    var_contingency = config.var_contingency_alt
 
 # Logger
 logger = logfile(market, 'trade')
@@ -829,6 +830,7 @@ def stop_reconfigure(mode = None):
     global var_contingency
     global bars_4h 
     global market_ref, exchange_abbr_ref
+    global status_update
     
     price_flip_upd = None # default is None   
     price_direction_move = None 
@@ -851,11 +853,12 @@ def stop_reconfigure(mode = None):
             price_flip_upd = False 
         ''' 
         # New logic: return the TD direction of the last candle per td_interval 
-        price_direction_move = bars_4h['td_direction'].iloc[-1]      # return 'up' or 'down' 
-        price_direction_move_previous = bars_4h['td_direction'].iloc[-2]      # return 'up' or 'down' 
+        price_direction_move = bars_4h['td_direction'].iloc[-1]      # returns 'up' or 'down' 
+        price_direction_move_previous = bars_4h['td_direction'].iloc[-2]      # returns 'up' or 'down' 
         #print "CHECK: short flag", short_flag, "price_direction", price_direction_move   #DEBUG
         
         # We will be considering that there is a price flip if we have a candle in setup with different colour which is followed by the same colour 
+        # So the rule will be for example if we are long and there is bearish flip, then there are 1 and 2 red -> price_flip_upd is true
         if ((not short_flag and price_direction_move == 'down' and price_direction_move_previous == 'down') 
         or (short_flag and price_direction_move == 'up' and price_direction_move_previous == 'up')): 
             price_flip_upd = True 
@@ -877,8 +880,16 @@ def stop_reconfigure(mode = None):
         lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
         lprint([  "New extreme stop value:", sl_extreme_upd ])
         #print ">>> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
-        
-        ''' #Old code
+
+        # > DEBUG & COMMS
+        status_update_previous = status_update
+        status_update = "Status update | {} {}: \nextreme_move stop {} \n4h-based stop {} \nprice flip confirmation {}".format(market, exchange_abbr, sl_extreme_upd, sl_target_upd, price_flip_upd)
+        status_update += "\nTD: \ncurrent {} {} \nprevious {} {}".format(bars_4h['td_setup'].iloc[-1], bars_4h['td_direction'].iloc[-1], bars_4h['td_setup'].iloc[-2], bars_4h['td_direction'].iloc[-2])
+        if status_update != status_update_previous: 
+            chat.send(status_update)
+        # < DEBUG & COMMS
+    
+        ''' #Old code (old logic)
         if short_flag != True: # LONGS  
             if bars_4h['td_direction'].iloc[-1] == 'up': 
                 sl_target_upd = bars_4h['low'].iloc[-1] * (1 - var_contingency)   
@@ -1236,12 +1247,12 @@ def sell_now(at_price):
                     decrease_attempts_total += 1
 
         # Decrease price more compared to last prices if required
-        if (decrease_price_step < 0.05) and decrease_price_flag:
+        if (decrease_price_step < 0.0255) and decrease_price_flag:      # changed the numbers here too
             if short_flag != True: #LONG
-                decrease_price_step += 0.005
+                decrease_price_step += 0.001
                 lprint(["Sell price will be decreased on", decrease_price_step*100, "%"]) 
             else: #SHORT 
-                decrease_price_step -= 0.005
+                decrease_price_step -= 0.001
                 lprint(["Sell price will be increased on", decrease_price_step*100, "%"]) 
             
         # Notify if a position cannot be sold for a long time 
@@ -1315,7 +1326,16 @@ def sell_now(at_price):
                     sell_q_step = sell_portion
                 
                 # Price update
-                price_last_sell = get_last_price(market)
+                if exchange != 'bitmex': 
+                    price_last_sell = get_last_price(market)
+                else: 
+                    # When we are long, on the exit we sell -> get the price from bids (the highest which is the first in the array)
+                    # When we are short, on the exit we buy -> get the price from asks (the lowest, which is the first in the array)
+                    if not short_flag: #LONG
+                        price_last_sell = float(getorderbook('bitmex', market, 'bids')[0]['Rate'])
+                    else: # SHORT   
+                        price_last_sell = float(getorderbook('bitmex', market, 'asks')[0]['Rate'])
+                
                 # Decreasing the price if necessary
                 price_to_sell = price_last_sell*(1 - decrease_price_step)
                 lprint(["Placing SELL order: Q:", sell_q_step, "@", price_to_sell, "Last market price:", price_last_sell, 
@@ -1680,18 +1700,19 @@ while run_flag and approved_flag:
             # Checking for extreme moves 
             if sl_extreme is not None:
                 if (short_flag and (price_last > sl_extreme)) or (not short_flag and (price_last < sl_extreme)): 
-                    lprint(["Breached TD extreme stop", price_last])
                     # Check if we need to sell
                     if not td_data_available: 
                         sale_trigger = ensure_sale(price_last)   
                     else: 
                         sale_trigger = True             
                     lprint(["Sale trigger", sale_trigger])
-                    chat.send(market +": exiting based on the breach of extreme")
+                    comm_string = "{}: exiting based on the breach of extreme {}. Current price {}".format(market, sl_extreme, price_last)
+                    chat.send(comm_string)
+                    lprint([comm_string])
         
             # Checking for nines and breaches of nines, if [-2] (before last) is nine and the price goes beyond the extreme of nine + (or -) contingency
             # bars_4h is a global var in the stop_reconfigure procedure
-            if td_data_available: 
+            if td_data_available and not sale_trigger:      # because we are checking this after the extreme move breach
                 if bars_4h['td_setup'].iloc[-2] == '9': 
                     if short_flag: #shorts 
                         if price_last > bars_4h['high'].iloc[-2]*(1 + var_contingency):
@@ -1700,8 +1721,9 @@ while run_flag and approved_flag:
                         if price_last < bars_4h['low'].iloc[-2]*(1 - var_contingency):
                             sale_trigger = True      
                 if sale_trigger: 
-                    lprint(["Sale trigger based on 9 - 1 rule"])
-                    chat.send(market +": exiting based on 9 - 1 rule")
+                    comm_string = "{}: exiting based on 9-1 rule. Current price {}".format(market, price_last)
+                    lprint([ comm_string ])
+                    chat.send(comm_string)
                  
             ### Stop loss triggered 
             if sale_trigger == True:       

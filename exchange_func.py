@@ -239,9 +239,11 @@ def bitmex_get_order(market, item):
         output = None 
     return output
 
-def bitmex_orderbook(market):    
+def bitmex_orderbook(market, type):    
+    if type not in ['bids', 'asks']: 
+        type = 'bids'
     market = market_std(market)    
-    bids = bitmex.fetch_order_book(market)['bids']
+    bids = bitmex.fetch_order_book(market)[type]      # 'bids' or 'asks'
     output_buy_list = []
     for bid in bids:
         temp_dict = {}
@@ -687,15 +689,15 @@ def buylimit(exchange, market, quantity, buy_rate, contracts = None):
     else:
         return 0
 
-def getorderbook(exchange, market):
+def getorderbook(exchange, market, type = 'bids'):      # can also be 'asks' in the type 
     if exchange == 'bittrex':
         return api_bittrex.getorderbook(market, 'buy')
     elif exchange == 'binance':
-        return binance_orderbook(market)
+        return binance_orderbook(market)    # not passing the type as we can only go long on binance
     elif exchange == 'bitmex':
-        return bitmex_orderbook(market)
+        return bitmex_orderbook(market, type)     # will process depending on the type
     elif exchange == 'bitstamp':
-        return bitstamp_orderbook(market)
+        return bitstamp_orderbook(market)   
     else:
         return 0  
 
