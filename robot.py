@@ -591,9 +591,9 @@ def buy_back(price_base):
                 # Updating time 
                 time_hour = time_hour_update
                 # Updating TD values 
-                bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, short_flag, market_ref, exchange_abbr_ref)     
+                bars = td_info.stats(market, exchange_abbr, td_period, 35000, 5, short_flag, market_ref, exchange_abbr_ref)     
                 try: 
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 80000, 5, short_flag, market_ref, exchange_abbr_ref)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, short_flag, market_ref, exchange_abbr_ref)   
                     bars_check_avail = True 
                 except: 
                     bars_check_avail = False 
@@ -843,7 +843,7 @@ def stop_reconfigure(mode = None):
     if (time_hour_update <> time_hour) or mode == 'now': 
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
-        bars_4h = td_info.stats(market, exchange_abbr, td_period, 50000, 5, short_flag, market_ref, exchange_abbr_ref)     
+        bars_4h = td_info.stats(market, exchange_abbr, td_period, 35000, 5, short_flag, market_ref, exchange_abbr_ref)     
 
         ''' 
         # Checking whether there was a price flip - previous logic 
@@ -1576,8 +1576,10 @@ job_id, rows = query_lastrow_id(sql_string)
 ### 5. Price data for time analysis and strategy. Check what's up with TD analysis data 
 start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
+
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 10000, 10, short_flag, market_ref, exchange_abbr_ref)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 10, short_flag, market_ref, exchange_abbr_ref)    
+    
     try: 
         if bars == None: 
             td_data_available = False 

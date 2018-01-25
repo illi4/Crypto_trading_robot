@@ -25,10 +25,13 @@ class tdlib(object):
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
         except: 
             return None 
-            
+        
         transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
         transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
-        transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records 
+        transactions_all['price'] = transactions_all.price.astype(float)
+        transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
+        del transactions_all    # memory optimisation
+        
         bars = transactions.price.resample(period, base = 7).ohlc()   
         
         # Added for cases when we have a different reference exchange / market for calculating the TD 
@@ -51,7 +54,9 @@ class tdlib(object):
                 return None 
             transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
             transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
-            transactions = transactions_all.tail(nentries)   # take the last N of 30-sec records 
+            transactions_all['price'] = transactions_all.price.astype(float)
+            transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
+            del transactions_all
             bars = transactions.price.resample(period, base = 7).ohlc()   
             
         # Referring to the correct array for move_extreme info 
@@ -60,7 +65,6 @@ class tdlib(object):
         else: 
             bars_check = bars  
 
-        
         # Initial conditions, working through TD 
         bearish_flip = False 
         bullish_flip = False 
@@ -70,14 +74,22 @@ class tdlib(object):
         size = bars['close'].size
         # print "TDLib: Bars df size:", size
         
-        bars.loc[:, 'td_setup'] = None    # additional column: td setup number 
-        bars.loc[:, 'td_direction'] = None  # td setup direction 
+        bars.loc[:, 'td_setup'] = 0    # additional column: td setup number 
+        bars.loc[:, 'td_direction'] = ''  # td setup direction 
         bars.loc[:, 'td_perfected'] = None # td setup perfection
         bars.loc[:, 'td_next_beyond'] = None # whether a candle with number 2 or later is going beyond 1      
         bars.loc[:, 'td_down_1_high'] = None # for the bearish setup storing info on 1's high       
         bars.loc[:, 'td_up_2_cl_abv_1'] = None # for the bullish setup checking if 2 closed higher than 1  
         bars.loc[:, 'td_up_2_close'] = None # for the further comparison  
         bars.loc[:, 'move_extreme'] = None # for stopping when the setup extreme is broken
+        
+        # Try changing the types to preserve memory space
+        bars['td_setup'] = pd.to_numeric(bars['td_setup'], errors='coerce')
+        bars['td_down_1_high'] = pd.to_numeric(bars['td_down_1_high'], errors='coerce')     # careful - default None was changed to zero, otherwise we will get NaNs
+        bars['td_up_2_close'] = pd.to_numeric(bars['td_up_2_close'], errors='coerce')       # same - careful 
+        bars[ ['td_direction', 'td_next_beyond'] ] = bars[ ['td_direction', 'td_next_beyond'] ].astype(str, bool)
+        bars[ ['td_up_2_cl_abv_1'] ] = bars[ ['td_up_2_cl_abv_1'] ].astype(bool)
+        bars['move_extreme'] = pd.to_numeric(bars['move_extreme'], errors='coerce')
 
         # Initial direction and values 
         direction_up = False 
@@ -208,9 +220,7 @@ class tdlib(object):
                 
             # common for any direction     
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
-            bars['move_extreme'].iloc[i] = move_extreme     # calculated only for points starting from 2 
-            
-        
+            bars['move_extreme'].iloc[i] = move_extreme     # calculated only for points starting from 2     
         
         ### Replacing prices if we have a reference in a changed bars array 
         if (market_ref is not None) and (exch_use_ref is not None): 

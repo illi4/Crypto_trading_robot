@@ -35,6 +35,9 @@ import os
 import numpy as np
 import traceback
 
+# For memory monitoring 
+import psutil
+
 ## Custom libraries 
 from telegramlib import telegram                              # my lib to work with Telegram
 from sqltools import query_lastrow_id, query           # proper requests to sqlite db
@@ -49,6 +52,8 @@ from coinigylib import coinigy
 coinigy = coinigy()
 
 ################################ Config - part I ############################################
+### Process id 
+process = psutil.Process(os.getpid()) 
 
 ### Import a configuration file 
 import config 
@@ -267,8 +272,8 @@ time.sleep(int(30/speedrun))
 
 # TD data availability 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 10, False, market_ref, exchange_abbr_ref)    
-    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 50000, 10, False, market_ref, exchange_abbr_ref)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 10, False, market_ref, exchange_abbr_ref)    
+    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 10, False, market_ref, exchange_abbr_ref)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -704,6 +709,10 @@ while buy_flag and approved_flag:
             if mode == 'now':
                 fixed_price_starter = True 
             
+            ### Memory consumption report 
+            memory_consumed = process.memory_info().rss  
+            print "> Memory consumed:", memory_consumed
+            
             ### Mode: 4h based on price action, or larger interval auto-based if fullta is used           
             if mode == '4h' or mode == 'fullta':
                 time_hour_update = time.strftime("%H")
@@ -711,11 +720,11 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
-                    bars = td_info.stats(market, exchange_abbr, td_period, 50000, 5, False, market_ref, exchange_abbr_ref)   
+                    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 5, False, market_ref, exchange_abbr_ref)   
                     
                 # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
                 if mode == 'fullta': 
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 100000, 5, False, market_ref, exchange_abbr_ref)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, False, market_ref, exchange_abbr_ref)   
                     if bars_extended['td_direction'].iloc[-1] == 'down': 
                         short_flag = True 
                     else: 

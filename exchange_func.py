@@ -184,7 +184,7 @@ def bitstamp_cancel(market, orderid):
     return cancel_result    
     
     
-#### Bitmex functions - using cctx  
+#### Bitmex functions - using cctx; added retries as there are some occational issues with timeouts 
 def bitmex_ticker(market):   
     market = market_std(market)
     ticker = bitmex.fetch_ticker(market)['close']
@@ -192,13 +192,18 @@ def bitmex_ticker(market):
 
 def bitmex_get_balance(currency):
     output = {} # to make consistent with the overall script   
-    balances = bitmex.fetch_balance()['free']['BTC']
+    retry = True 
+    while retry:   
+        try: 
+            balances = bitmex.fetch_balance()['free']['BTC']
+            retry = False 
+        except: 
+            retry = True 
     output['Available'] = float(balances)       
     return output
     
 def bitmex_openorders(market): # returns my open orders, not initially available in ccxt 
     market = market_std(market)    
-    
     retry = True 
     while retry:  #  added a condition to handle nonce issues     
         try: 
@@ -224,17 +229,34 @@ def bitmex_openorders(market): # returns my open orders, not initially available
     
 def bitmex_cancel(market, orderid): 
     market = market_std(market)    
+    retry = True 
+    while retry: 
+        try: 
+            cancel_result = bitmex.cancel_order(id = orderid, symbol = market, params = {}) 
+            retry = False 
+        except: 
+            retry = True 
+    ''' # Previous code
     try:
         cancel_result = bitmex.cancel_order(id = orderid, symbol = market, params = {}) 
     except: # error handling 
         cancel_result = 'unknown order' 
+    ''' 
     return cancel_result    
     
 def bitmex_get_order(market, item): 
     market = market_std(market)    
+    retry = True 
+    while retry: 
+        try: 
+            bitmex_order = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"orderID":item})})[0]
+            retry = False 
+        except: 
+            retry = True 
+
     try: 
-        bitmex_order = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"orderID":item})})[0]
-        output = {} 
+        #bitmex_order = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"orderID":item})})[0]   #OLD CODE 
+        output = {}  
         output["OrderUuid"]  = bitmex_order["orderID"]
         output["Quantity"] = bitmex_order["orderQty"]
         output["QuantityRemaining"] = Decimal(bitmex_order["leavesQty"])
@@ -251,7 +273,16 @@ def bitmex_orderbook(market, type):
     if type not in ['bids', 'asks']: 
         type = 'bids'
     market = market_std(market)    
-    bids = bitmex.fetch_order_book(market)[type]      # 'bids' or 'asks'
+    
+    retry = True 
+    while retry: 
+        try: 
+            bids = bitmex.fetch_order_book(market)[type] 
+            retry = False 
+        except: 
+            retry = True 
+    
+    #bids = bitmex.fetch_order_book(market)[type]      # 'bids' or 'asks'           # OLD CODE 
     output_buy_list = []
     for bid in bids:
         temp_dict = {}
@@ -317,7 +348,16 @@ def bitmex_selllimit(market, quantity_sell, sell_rate, contracts = None):    # >
 # A few additional functions relevant to bitmex only (positions and not orders)        
 def bitmex_openpositions(market):  
     market = market_std(market)    
-    positions = bitmex.fetchPositions(symbol = market, since = None, limit = 300, params = {})   
+    
+    retry = True 
+    while retry: 
+        try: 
+            positions = bitmex.fetchPositions(symbol = market, since = None, limit = 300, params = {})   
+            retry = False 
+        except: 
+            retry = True 
+    
+    #positions = bitmex.fetchPositions(symbol = market, since = None, limit = 300, params = {})         # OLD CODE when no retry
     result = []
     for position in positions: 
         # print position 
@@ -343,15 +383,40 @@ def bitmex_closepositions(positions, market, price):
             contracts_total += position['contracts'] 
     if contracts_total < 0: 
         # If the original was short 
-        result = bitmex_buylimit(market, None, price, contracts_total)
+        retry = True 
+        while retry: 
+            try: 
+                result = bitmex_buylimit(market, None, price, contracts_total)
+                retry = False 
+            except: 
+                retry = True 
+        
+        #result = bitmex_buylimit(market, None, price, contracts_total)
     else: 
-        result = bitmex_selllimit(market, None, price, contracts_total)
+        retry = True 
+        while retry: 
+            try: 
+                result  = bitmex_selllimit(market, None, price, contracts_total)
+                retry = False 
+            except: 
+                retry = True 
+    
+        #result = bitmex_selllimit(market, None, price, contracts_total)
     return result    
 
 def bitmex_get_sell_ordhist(market):  # only need sell (short) orders (IDs) 
     market = market_std(market)    
     listoforders = [] 
-    bitmex_orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {})
+    
+    retry = True 
+    while retry: 
+        try: 
+            bitmex_orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {})
+            retry = False 
+        except: 
+            retry = True 
+    
+    #bitmex_orders = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {})
 
     for order in bitmex_orders:  
         temp_dict = {}
@@ -370,7 +435,14 @@ def bitmex_convert_price(market, price):  #fixes price considering the TickSize
      
 def bitmex_leverage(market, leverage): 
     market = market_std(market)    
-    return bitmex.position_leverage(market, leverage) 
+    retry = True 
+    while retry: 
+        try: 
+            result = bitmex.position_leverage(market, leverage) 
+            retry = False 
+        except: 
+            retry = True 
+    return result
     
 #### Binance functions - using cctx 
 def binance_ticker(market): 
