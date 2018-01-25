@@ -634,7 +634,7 @@ def buy_back(price_base):
             
             # Checking if we should buy back 
             # Check longs 
-            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 60) and (price_upd > (bars['high'].iloc[-2])*(1 + diff_threshold)):      # switching to long    
+            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 30) and (price_upd > (bars['high'].iloc[-2])*(1 + diff_threshold)):      # switching to long    
                 # Depending on the short flag 
                 if not short_flag:  # same direction - checking bars_extended 
                     bars_check = bars_extended
@@ -650,20 +650,22 @@ def buy_back(price_base):
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Check shorts  
-            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 60) and (price_upd < (bars['low'].iloc[-2])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
-                # Depending on the short flag 
-                if short_flag:  # same direction - checking bars_extended 
-                    bars_check = bars_extended
-                else:     # different direction - checking a larger period 
-                    bars_check = bars_ext_opposite
-                # Checking the conditions      
-                if (bars_check_avail and bars_check_avail['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
-                    bback_result = True 
-                    direction = 'down'
-                    flag_reb_c = False 
-                    lprint(["TD buyback initiated on the short side"])
-                    if bars_check_avail == False: 
-                        lprint(["Note that higher - timeframe TD analysis is not available"])    
+            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
+                # This should _not_ be done on setup 7,8, or 9 
+                if (bars['td_setup'].iloc[-1] < 7):
+                    # Depending on the short flag 
+                    if short_flag:  # same direction - checking bars_extended 
+                        bars_check = bars_extended
+                    else:     # different direction - checking a larger period 
+                        bars_check = bars_ext_opposite
+                    # Checking the conditions      
+                    if (bars_check_avail and bars_check_avail['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
+                        bback_result = True 
+                        direction = 'down'
+                        flag_reb_c = False 
+                        lprint(["TD buyback initiated on the short side"])
+                        if bars_check_avail == False: 
+                            lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Sleeping 
             time.sleep(sleep_timer_buyback)     

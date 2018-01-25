@@ -720,11 +720,13 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
+                    del bars                         # memory optimisation attempt
+                    del bars_extended       # memory optimisation attempt
                     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 5, False, market_ref, exchange_abbr_ref)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, False, market_ref, exchange_abbr_ref)   
                     
                 # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
                 if mode == 'fullta': 
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, False, market_ref, exchange_abbr_ref)   
                     if bars_extended['td_direction'].iloc[-1] == 'down': 
                         short_flag = True 
                     else: 
@@ -739,15 +741,17 @@ while buy_flag and approved_flag:
                     check_value = bars['high'].iloc[-2] * (1 + diff_threshold)
                     lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
                     lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
-                    if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value):  
+                    # We should not buy when a setup is finishing 
+                    if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value) and (bars['td_setup'].iloc[-1] < 7):  
                         fixed_price_starter = True 
                     else: 
                         lprint(["> Long buy condition not met"])
                 else: #SHORTS 
                     check_value = bars['low'].iloc[-2] * (1 - diff_threshold)
                     lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
-                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar low - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
-                    if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value):  
+                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar low - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])      
+                    # We should not buy when a setup is finishing 
+                    if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value) and (bars['td_setup'].iloc[-1] < 7):  
                         fixed_price_starter = True 
                     else: 
                         lprint(["> Short buy condition not met"])
