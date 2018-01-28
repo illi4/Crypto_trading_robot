@@ -81,10 +81,11 @@ while True:
     # Timers on the start
     start_time = time.time()
     
-    # Copy files to dropbox if needed (price data) every hour 
-    if (start_time - start_time_dir_copy) > 3600: 
+    # Copy files to dropbox if needed (price data) every 3 hours 
+    if (start_time - start_time_dir_copy) > 10800: 
         start_time_dir_copy = start_time
         os.system('cp -R ' + dir_from + ' ' + dir_to)
+        #print 'Copying', 'cp -R ' + dir_from + ' ' + dir_to
     
     # Updating crypto prices 
     for elem in markets_list: 
@@ -142,11 +143,11 @@ while True:
             # Logging issues 
             append_line([date_time, elem[0], elem[1]], 'price_log_issues.csv')
                
-            if failed_attempts_dict[elem[0]] >= 5: 
+            if failed_attempts_dict[elem[0]] == 5: 
                 time_failed_diff = time_failed[elem[0]] - time.time()
                 if time_failed_diff < 600:        
                     chat.send("Cannot get the price of " + elem[0] + " for 10 minutes and 5 times in a row")
-                    failed_attempts_dict[elem[0]] = 0 
+                    #failed_attempts_dict[elem[0]] = 0 
                     time_failed[elem[0]] = time.time()
         # Sleep for just a bit 
         time.sleep(0.2) 

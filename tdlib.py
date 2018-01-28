@@ -2,12 +2,13 @@ import time
 from time import localtime, strftime
 from sys import exit, argv
 import pandas as pd 
+import warnings
+warnings.filterwarnings("ignore")
+# Garbage collector 
+import gc
 
 # Config file 
 import config 
-
-import warnings
-warnings.filterwarnings("ignore")
 
 time_delta = config.timedelta
 
@@ -38,13 +39,6 @@ class tdlib(object):
         if (market_ref is not None) and (exch_use_ref is not None): 
             # Storing the price data so that we will replace it later
             bars_prices_original = bars.copy()
-            ''' 
-            bars_prices_original = pd.DataFrame()
-            bars_prices_original['open'] = bars['open']
-            bars_prices_original['high'] = bars['high']
-            bars_prices_original['low'] = bars['low']
-            bars_prices_original['close'] = bars['close']
-            ''' 
             
             # Grab the other file 
             filename = 'price_log/' + market_ref + '_' + exch_use_ref.lower() + '.csv'
@@ -218,7 +212,7 @@ class tdlib(object):
                 bars['td_up_2_cl_abv_1'].iloc[i] = up_2_cl_abv_1
                 bars['td_up_2_close'].iloc[i] = td_up_2_close
                 
-            # common for any direction     
+            # Common for any direction     
             bars['td_next_beyond'].iloc[i] = nextbar_beyond
             bars['move_extreme'].iloc[i] = move_extreme     # calculated only for points starting from 2     
         
@@ -238,6 +232,13 @@ class tdlib(object):
         else: 
             return bars.tail(tail)[:-1]    
         ''' 
+        bars_return =  bars.tail(tail).copy()
         
-        return bars.tail(tail)
+        # Memory cleansing 
+        del bars, bars_prices_original
+        del td_up_2_close, move_extreme, td_down_1_high, setup_down, up_2_cl_abv_1, setup_up
+        del bars_check
+        gc.collect()
+        
+        return bars_return
     

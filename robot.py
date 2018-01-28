@@ -591,14 +591,14 @@ def buy_back(price_base):
                 # Updating time 
                 time_hour = time_hour_update
                 # Updating TD values 
-                bars = td_info.stats(market, exchange_abbr, td_period, 35000, 5, short_flag, market_ref, exchange_abbr_ref)     
+                bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)     
                 try: 
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, short_flag, market_ref, exchange_abbr_ref)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, short_flag, market_ref, exchange_abbr_ref)   
                     bars_check_avail = True 
                 except: 
                     bars_check_avail = False 
                 try: 
-                    bars_ext_opposite = td_info.stats(market, exchange_abbr, td_period_ext_opposite, 80000, 10, short_flag, market_ref, exchange_abbr_ref)   
+                    bars_ext_opposite = td_info.stats(market, exchange_abbr, td_period_ext_opposite, 80000, 15, short_flag, market_ref, exchange_abbr_ref)   
                     bars_check_avail = True 
                 except: 
                     bars_check_avail = False 
@@ -659,7 +659,7 @@ def buy_back(price_base):
                     else:     # different direction - checking a larger period 
                         bars_check = bars_ext_opposite
                     # Checking the conditions      
-                    if (bars_check_avail and bars_check_avail['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
+                    if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
                         bback_result = True 
                         direction = 'down'
                         flag_reb_c = False 
@@ -845,7 +845,7 @@ def stop_reconfigure(mode = None):
     if (time_hour_update <> time_hour) or mode == 'now': 
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
-        bars_4h = td_info.stats(market, exchange_abbr, td_period, 35000, 5, short_flag, market_ref, exchange_abbr_ref)     
+        bars_4h = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)     
 
         ''' 
         # Checking whether there was a price flip - previous logic 
@@ -1580,7 +1580,7 @@ start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 10, short_flag, market_ref, exchange_abbr_ref)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)    
     
     try: 
         if bars == None: 

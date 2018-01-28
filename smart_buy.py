@@ -272,8 +272,8 @@ time.sleep(int(30/speedrun))
 
 # TD data availability 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 10, False, market_ref, exchange_abbr_ref)    
-    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 10, False, market_ref, exchange_abbr_ref)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)    
+    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -722,8 +722,8 @@ while buy_flag and approved_flag:
                     time_hour = time_hour_update
                     del bars                         # memory optimisation attempt
                     del bars_extended       # memory optimisation attempt
-                    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 5, False, market_ref, exchange_abbr_ref)   
-                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 5, False, market_ref, exchange_abbr_ref)   
+                    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)   
+                    bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)   
                     
                 # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
                 if mode == 'fullta': 
