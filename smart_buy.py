@@ -724,9 +724,9 @@ while buy_flag and approved_flag:
                     # Updating the current hour and the TD values 
                     lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
-                    del bars.left                         # memory optimisation 
-                    del bars_extended.left       # memory optimisation  
-                    del num_null.left, check_value.left, elem.left
+                    del bars                         # memory optimisation 
+                    del bars_extended       # memory optimisation  
+                    del num_null, check_value, elem
                     gc.collect()
                    
                     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)   
