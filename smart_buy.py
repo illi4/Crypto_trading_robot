@@ -113,7 +113,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 btc_market_reference = config.btc_market_reference
 market_ref = None  
 exchange_abbr_ref = None 
-num_null = None 
+
 
 ################################ Functions - part I ############################################
 
@@ -274,6 +274,7 @@ td_data_extended_available = True  # default which will be changed to False when
 time.sleep(int(30/speedrun))
 
 # TD data availability 
+elem = None 
 try: 
     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)    
     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)    
@@ -302,6 +303,8 @@ except:
     td_data_extended_available = False 
  
 print "TD data availability:", td_data_available, "| extended ", td_data_extended_available
+
+del elem         # delete unused var from memory 
 
 ### Check if this is a part of workflow (meaning that a job should be then launched)   
 sql_string = "SELECT wf_id, run_mode FROM workflow WHERE market = '{}' AND exchange = '{}'".format(market, exchange_abbr)
@@ -583,7 +586,9 @@ issues_notify = True
 
 ### 4. Main buying loop  
 while buy_flag and approved_flag: 
-    buy_rate = 0        # price 
+    buy_rate = 0                    # price 
+    num_null = None             # default variable values
+    check_value = None 
     
     try:  
         # Checking existing orders
@@ -726,7 +731,7 @@ while buy_flag and approved_flag:
                     time_hour = time_hour_update
                     del bars                         # memory optimisation 
                     del bars_extended       # memory optimisation  
-                    del num_null, check_value, elem
+                    del num_null, check_value
                     gc.collect()
                    
                     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)   
