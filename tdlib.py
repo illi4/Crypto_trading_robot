@@ -12,6 +12,7 @@ import config
 
 time_delta = config.timedelta
 
+
 # TD analysis
 class tdlib(object):
     def __init__(self):
@@ -22,6 +23,8 @@ class tdlib(object):
         filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'
         #print "Short_flag", short_flag 
         
+        bars_prices_original = None 
+        
         try: 
             transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
         except: 
@@ -31,7 +34,6 @@ class tdlib(object):
         transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
         transactions_all['price'] = transactions_all.price.astype(float)
         transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
-        del transactions_all    # memory optimisation
         
         bars = transactions.price.resample(period, base = 7).ohlc()   
         
@@ -50,7 +52,6 @@ class tdlib(object):
             transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
             transactions_all['price'] = transactions_all.price.astype(float)
             transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
-            del transactions_all
             bars = transactions.price.resample(period, base = 7).ohlc()   
             
         # Referring to the correct array for move_extreme info 
@@ -167,6 +168,7 @@ class tdlib(object):
             # That is why referring to 3 here (the script returns all including the current one )
             # Otherwise it would be exiting on every flip potentially             
             if (direction_down and (setup_down > 2) and short_flag):
+                ###move_extreme = 0.5
                 if setup_down == 3: 
                     move_extreme = max(bars_check['high'].iloc[i - 1], bars_check['high'].iloc[i - 2])
                 else: 
@@ -174,6 +176,7 @@ class tdlib(object):
                         move_extreme = bars_check['high'].iloc[i]  
             
             if (direction_up and (setup_up > 2) and not short_flag):
+                ###move_extreme = 1
                 if setup_up == 3: 
                     move_extreme = min(bars_check['low'].iloc[i - 1], bars_check['low'].iloc[i - 2])
                 else: 
@@ -237,6 +240,7 @@ class tdlib(object):
         ##print "MEM USE bars_return", bars.memory_usage(index=True).sum()
         
         # Memory cleansing 
+        del transactions_all, transactions
         del bars, bars_prices_original
         del td_up_2_close, move_extreme, td_down_1_high, setup_down, up_2_cl_abv_1, setup_up
         del bars_check
