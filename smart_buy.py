@@ -34,6 +34,8 @@ from shutil import copyfile
 import os
 import numpy as np
 import traceback
+# Garbage collector 
+import gc
 
 # For memory monitoring 
 import psutil
@@ -111,6 +113,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 btc_market_reference = config.btc_market_reference
 market_ref = None  
 exchange_abbr_ref = None 
+num_null = None 
 
 ################################ Functions - part I ############################################
 
@@ -717,11 +720,15 @@ while buy_flag and approved_flag:
             if mode == '4h' or mode == 'fullta':
                 time_hour_update = time.strftime("%H")
                 if (time_hour_update <> time_hour): 
+                
                     # Updating the current hour and the TD values 
                     lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
-                    del bars                         # memory optimisation attempt
-                    del bars_extended       # memory optimisation attempt
+                    del bars.left                         # memory optimisation 
+                    del bars_extended.left       # memory optimisation  
+                    del num_null.left, check_value.left, elem.left
+                    gc.collect()
+                   
                     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)   
                     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)   
                     

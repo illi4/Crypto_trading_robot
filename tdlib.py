@@ -232,12 +232,14 @@ class tdlib(object):
         else: 
             return bars.tail(tail)[:-1]    
         ''' 
+        
         bars_return =  bars.tail(tail).copy()
+        ##print "MEM USE bars_return", bars.memory_usage(index=True).sum()
         
         # Memory cleansing 
-        del bars, bars_prices_original
-        del td_up_2_close, move_extreme, td_down_1_high, setup_down, up_2_cl_abv_1, setup_up
-        del bars_check
+        del bars.left, bars_prices_original.left
+        del td_up_2_close.left, move_extreme.left, td_down_1_high.left, setup_down.left, up_2_cl_abv_1.left, setup_up.left
+        del bars_check.left
         gc.collect()
         
         return bars_return
