@@ -1,3 +1,4 @@
+################################ Libraries ############################################
 ## Standard libraries 
 import os
 import time
@@ -17,11 +18,11 @@ import json # requests
 from shutil import copyfile # to copy files
 
 ## Custom libraries 
-from telegramlib import telegram # library to work with Telegram messemger
-from sqltools import query_lastrow_id, query # proper requests to sqlite db
-from loglib import logfile # logging
-import platformlib as platform  # detecting the OS and assigning proper folders 
-from coinigylib import coinigy
+from telegramlib import telegram                                # library to work with Telegram messemger
+from sqltools import query_lastrow_id, query            # proper requests to sqlite db
+from loglib import logfile                                              # logging
+import platformlib as platform                                      # detecting the OS and assigning proper folders 
+from coinigylib import coinigy                                      # library to work with coinigy 
 
 coinigy = coinigy()
 
@@ -35,7 +36,7 @@ platform_run, cmd_init, cmd_init_buy = platform.initialise()
 #################### For Telegram integration ###############################################################
 chat = telegram()
 
-comm_method = 'chat' # 'mail' or 'chat'
+comm_method = 'chat' # 'mail' or 'chat', chat is preferable for the smooth experience 
 send_messages = True
 
 ######################################################################################
@@ -69,7 +70,7 @@ def telegram_buy(wf_id = None):
         try:
             buy_trade, buy_currency = buy_market.split('-')
         except: 
-            buy_trade = buy_market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+            buy_trade = buy_market  # if only one market vs BTC is provided - e.g. XRPH18 on bitmex  
             buy_currency = 'BTC'
         
         try: 
@@ -82,31 +83,28 @@ def telegram_buy(wf_id = None):
         except: 
             buy_price = ''
         
-        # print buy_trade, buy_currency, buy_total, buy_price # DEBUG
         try:
             buy_time_limit = msg_text_split[5]
         except: 
             buy_time_limit = '' 
         
         if wf_id is not None: 
-            #buy_market = '{0}-{1}'.format(buy_trade, buy_currency)
             sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(buy_market, buy_trade, buy_currency, buy_exchange, wf_id) 
             job_id, rows = query_lastrow_id(sql_string)
             
         # Run depending on the platform
         if platform_run == 'Windows': 
             cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_market, buy_total, buy_price, buy_time_limit])
-            # cmd_init_buy is 'start cmd /K python robot.py '
+            # for Win, cmd_init_buy is 'start cmd /K python robot.py '
         else: 
             # Nix
             cmd_str = cmd_init_buy + ' '.join([buy_mode, buy_exchange, buy_market, buy_total, buy_price, buy_time_limit]) + '"'
-            # cmd_init_buy is 'gnome-terminal --tab --profile Active -e "python /home/illi4/Robot/robot.py'   # we will also need to add params and close with "
+            # for *Nix, cmd_init_buy is 'gnome-terminal --tab --profile Active -e "python /home/illi4/Robot/robot.py'   # we will also need to add params and close with "
         
-        # print "CMD: " + cmd_str # DEBUG
         os.system(cmd_str)
         chat.send('Buy task requested')
-        #print '>>> Started a new buy job: {} {} {} {} {}'.format(buy_market, buy_total, buy_price, buy_time_limit)
-        print ">>> Started a new buy job: ", cmd_str    #DEBUG
+        print ">>> Started a new buy job: ", cmd_str 
+        
     except: 
         chat.send('Not all the mandatory parameters are specified')    
                 
@@ -126,8 +124,8 @@ def telegram_sell(wf_id = None):
 
     # Starting a new process with a new task 
     msg_text_split = msg_text.split()
-    # Processing params - should all be entered
     
+    # Processing params - should all be entered
     try: 
         run_simulation_param = msg_text_split[0].lower()
         run_exchange = msg_text_split[1].lower()   
@@ -136,22 +134,12 @@ def telegram_sell(wf_id = None):
         try:
             run_trade, run_currency = run_market.split('-')
         except: 
-            run_trade = run_market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
+            run_trade = run_market  # if only one market vs BTC is provided - e.g. XRPH18 on bitmex  
             run_currency = 'BTC'
             
-        #run_trade = msg_text_split[2].upper()
-        #run_currency = msg_text_split[3].upper()
         run_price_curr = msg_text_split[3]
         run_tp = msg_text_split[4]
         run_sl = msg_text_split[5]
-        
-        ''' # Not applicable for shorts 
-        if float(run_tp) < float(run_sl): 
-            chat.send('TP trigger less then the SL trigger - reversing these variables')  
-            tmp_targ = run_tp
-            run_tp = run_sl
-            run_sl = tmp_targ
-        ''' 
         
         try:
             run_limit_sell_amount = msg_text_split[6]
@@ -170,7 +158,7 @@ def telegram_sell(wf_id = None):
             cmd_str = cmd_init + ' '.join([run_simulation_param, run_exchange, run_market, run_price_curr, run_tp, run_sl, run_limit_sell_amount, run_sell_portion]) + '"'
         os.system(cmd_str)
         
-        # Check if launched fine  
+        # Check if launched  
         chat.send('Launching, hold on...')
         time.sleep(30)
         sql_string = "SELECT job_id FROM jobs WHERE market = '{}'".format(run_market.upper())
@@ -182,8 +170,7 @@ def telegram_sell(wf_id = None):
             chat.send('Launched a new bot with these parameters')
         except:
             chat.send('The job was not launched')
-
-        
+    
     except: 
         chat.send('Not all the mandatory parameters are specified')
 
@@ -211,7 +198,7 @@ def telegram_long():
     except: 
         chat.send('Not all the mandatory parameters are specified')
         
-# Starting daemon
+###################################### Starting the daemon #############################################
 print '------------------------------------- \nWaiting for new instructions from Telegram.\n' 
 
 while True:
@@ -257,7 +244,6 @@ while True:
 
             if rows == []: 
                 no_profit_tasks = True
-                #chat.send('No active tasks')
             else:
                 for row in rows:
                     re_market = row[1]
@@ -309,7 +295,6 @@ while True:
 
             if rows == []: 
                 no_buy_tasks = True
-                #chat.send('No active tasks')
             else: 
                 for row in rows:
                     re_b_market = row[1]
@@ -336,7 +321,6 @@ while True:
             rows = query(sql_string)
             if rows == []: 
                 no_bb_tasks = True
-                #chat.send('No active tasks')
             else: 
                 for row in rows:
                     bb_market = row[1]
@@ -347,7 +331,7 @@ while True:
                     reply_string_bb += "{}: BB@ {}, current {}, trade of {} ({})\n".format(bb_market, bb_price, bb_curr_price, round(bb_trade_price, 3), bb_exchange)
             reply_string_bb += '\n'
             
-            # Info from the DB - longs
+            # Info from the DB - long-term holds
             # DB: id, market, EP, quantity
             reply_string_long = '>> HOLD\n' 
             
@@ -356,7 +340,6 @@ while True:
 
             if rows == []: 
                 no_longs = True
-                #chat.send('No active tasks')
             else: 
                 for row in rows:
                     re_l_market = row[1]

@@ -85,7 +85,6 @@ while True:
     if (start_time - start_time_dir_copy) > 10800: 
         start_time_dir_copy = start_time
         os.system('cp -R ' + dir_from + ' ' + dir_to)
-        #print 'Copying', 'cp -R ' + dir_from + ' ' + dir_to
     
     # Updating crypto prices 
     for elem in markets_list: 
@@ -103,7 +102,6 @@ while True:
             # Appending to the file 
             if elem[0] <> 'USDT-USD': 
                 append_line([timestamp, price], file_dict[name_id])
-                #print "Folder:", file_dict[name_id]
 
             # Specifically for USDT 
             if elem[0] == 'USDT-USD': 
@@ -143,21 +141,20 @@ while True:
             # Logging issues 
             append_line([date_time, elem[0], elem[1]], 'price_log_issues.csv')
                
-            if failed_attempts_dict[elem[0]] == 5: 
-                time_failed_diff = time_failed[elem[0]] - time.time()
-                if time_failed_diff < 600:        
-                    chat.send("Cannot get the price of " + elem[0] + " for 10 minutes and 5 times in a row")
-                    #failed_attempts_dict[elem[0]] = 0 
-                    time_failed[elem[0]] = time.time()
-        # Sleep for just a bit 
+            if failed_attempts_dict[elem[0]] == 10:   
+                chat.send("Cannot get the price of " + elem[0] + " 10 times in a row")
+                time_failed[elem[0]] = time.time()
+                
+        # Sleep not to overload coinigy with requests 
         time.sleep(0.2) 
-    # Timer 
+        
+    # Timer calculation
     time_now = time.time() 
     time_diff = (math.ceil(time_now - start_time)) 
-    # print "Cycle run time", time_diff
+
     if time_diff > 5: 
         time_sleep = 0 
     else: 
-        time_sleep = 5 - time_diff     # as we will be measuring USDT per minute and then comparing 15-min intervals 
+        time_sleep = 5 - time_diff    
     
-    time.sleep(time_sleep)  # so that the difference for usdt intervals is around a minute. There is ~ a sec per each element request 
+    time.sleep(time_sleep)   

@@ -3,7 +3,7 @@ import json
 import urllib2
 import time
 
-# Import exchanges libraries in case coinigy api fails to get a price 
+# Import exchanges library ticker in case coinigy api fails to get a price 
 from exchange_func import getticker
 
 # Config 
@@ -22,12 +22,12 @@ class coinigy(object):
         json_resp = None 
         exchange = exchange.upper()
         
-        # For bitmex, USD-BTC ticker is available through XBTUSD product 
+        # For bitmex, USD-BTC ticker is available through the XBTUSD product 
         if (ticker == 'BTC-USD' or ticker == 'USD-BTC') and exchange == 'BMEX':
             ticker = 'XBTUSD'  
         
         # Checking the price 
-        while count < 3: 
+        while count < 3:    # several attempts to handle availability / overload issues 
             try:
                 values =  {
                     "exchange_code": exchange, 
@@ -40,12 +40,9 @@ class coinigy(object):
 
                 response = urllib2.urlopen(req, json.dumps(values)).read()
                 json_resp = json.loads(response)
-                #print json_resp
                 count = 3
             except:
-                count+= 1
-                #print json_resp
-                #print count 
+                count += 1
                 time.sleep(0.5)
                 
         if json_resp is not None: 
@@ -54,19 +51,20 @@ class coinigy(object):
             except: 
                 json_resp = None 
         
-        if json_resp is None: 
-            # Trying directly via an exchange if coinigy is not responding 
+        if json_resp is None:   # trying to get prices directly via an exchange if coinigy is not responding 
             if exchange == 'BTRX': 
                 exchange = 'bittrex'
             elif exchange == 'BINA':      
                 exchange = 'binance'
             elif exchange == 'BMEX':   
                 exchange = 'bitmex'
-            # conversions 
+                
+            # Conversions 
             ticker = ticker.replace('/', '-')
             if ticker == 'XBT-USD': 
                 ticker = 'USD-BTC'
             print '>> Trying exchange directly for', ticker, exchange
+            
             count = 0
             price_ticker = None 
             while count < 3: 
@@ -101,8 +99,7 @@ class coinigy(object):
             
         for key, exch_name in exchanges.iteritems(): 
             str_balance += exch_name + '\n'  
-            # Refreshing balance 
-            req = urllib2.Request('https://api.coinigy.com/api/v1/refreshBalance')
+            req = urllib2.Request('https://api.coinigy.com/api/v1/refreshBalance')      # balance refresh is needed for coinigy 
             req.add_header('x-api-key', self.key)
             req.add_header('x-api-secret', self.secret)
             req.add_header('content-type', self.content)
@@ -126,20 +123,19 @@ class coinigy(object):
             response_exchanges = urllib2.urlopen(req, json.dumps(values)).read()
             json_resp = json.loads(response_exchanges)
             
+            ### Formatting the response 
             for elem in json_resp['data']: 
-                # print elem # DEBUG 
                 currency = elem['balance_curr_code']
                 balance_total = float(elem['balance_amount_total'])
                 balance = float(elem['balance_amount_avail'])
                 pending = balance_total - balance
                 btc_balance = float(elem['btc_balance'])
                 
-                # print key, exch_name, currency, balance_total, btc_balance   # DEBUG 
-                
                 if pending == 0: 
                     pending_str = '\n'
                 else:
                     pending_str = '[P: {}]\n'.format(round(pending, 3))        
+                    
                 if (round(balance_total, 3) > 0): 
                     if currency == 'USDT': 
                         usdte = balance / btc_balance
@@ -155,6 +151,7 @@ class coinigy(object):
                         str_balance += '{}: {} (~{} BTC) {}'.format(currency, round(balance, 3), round(btc_balance, 3), pending_str)
             str_balance += '\n'  
         
+        # Local currency conversion 
         try:
             request_exchange_rate = 'http://api.fixer.io/latest?base=USD&symbols=' + config.local_curr
             response = urllib2.urlopen(request_exchange_rate) 

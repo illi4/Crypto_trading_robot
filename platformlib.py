@@ -1,7 +1,7 @@
-import platform # for Nix / Win detection
+# Simplistic library to detect Nix / Win and return proper commands 
+import platform 
 import config 
 
-# TD analysis
 class platformlib(object):
     def __init__(self):
         self.public = ['initialise']
@@ -13,7 +13,6 @@ class platformlib(object):
             cmd_init = 'start cmd /K python robot.py '
             cmd_init_buy = 'start cmd /K python smart_buy.py '
         else: 
-            # Nix
             cmd_init = config.cmd_init
             cmd_init_buy = config.cmd_init_buy
         

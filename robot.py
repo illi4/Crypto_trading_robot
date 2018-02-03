@@ -1,18 +1,14 @@
-##################################################################################################################
-# Use: python robot.py exchange simulation_flag(s/r/sns/rns) basic_currency altcoin entry_price TP% SL% [limit_of_amount_to sell] [sell_portion]
-# s - simulation with stop-loss
-# r - real mode with stop-loss 
-# sns - simulation without stop loss and only with trailing stop on profit 
-# rns - real mode without stop loss and only with trailing stop on profit 
-#
-# Example: trade 100 LTC (vs BTC) bought at 0.0017 with the target profit of 18% and stop-loss 5% in simulation mode
-# > python robot.py btrx s BTC LTC 0.0017 18 5 100
-#
-# Running without input parameters will start Telegram bot listener
-#
-# Conservative - TP 1.13 / SL 0.95, volatile (NEO etc.) TP 1.18 / SL 0.94
-# SL threshold applies both to original stop and to trailing stop
-
+'''
+Use: 
+    robot.py simulation (s/r/sns/rns) exchange basic_curr-altcoin entry_price TP SL [limit_of_amount_to_sell] [sell_portion] 
+    Example: 
+    > python robot.py s btrx BTC-LTC 0.0017 0.0021 0.0015 100 
+    Modes:
+        s: simulation with stop-loss
+        r: real mode with stop-loss
+        sns: simulation and stop only on profit (no stop loss - not recommended)
+        rns: real and stop only on profit (no stop loss - not recommended)
+'''
 ################################ Libraries ############################################
 # Standard libraries 
 import os
@@ -37,16 +33,30 @@ import traceback
 
 # Decimal precision and roubding 
 decimal.getcontext().prec = 25
-decimal.getcontext().rounding = 'ROUND_DOWN'
+decimal.getcontext().rounding = 'ROUND_DOWN'    
 
 ## Custom libraries 
-from telegramlib import telegram # my lib to work with Telegram
-from sqltools import query_lastrow_id, query # proper requests to sqlite db
-from loglib import logfile # logging 
-import platformlib as platform  # detecting the OS and assigning proper folders 
+from telegramlib import telegram                            # my lib to work with Telegram
+from sqltools import query_lastrow_id, query        # proper requests to sqlite db
+from loglib import logfile                                          # logging 
+import platformlib as platform                                  # detecting the OS and setting proper folders 
 
 # Universal functions for all exchanges              
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions, bitmex_leverage
+from exchange_func import (getticker, 
+                                                  getopenorders, 
+                                                  cancel, 
+                                                  getorderhistory, 
+                                                  getorder, 
+                                                  getbalance, 
+                                                  selllimit, 
+                                                  getorderbook, 
+                                                  buylimit, 
+                                                  getbalances, 
+                                                  binance_price_precise, 
+                                                  binance_quantity_precise, 
+                                                  getpositions, 
+                                                  closepositions, 
+                                                  bitmex_leverage)
 
 # Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
 from coinigylib import coinigy 
@@ -57,7 +67,7 @@ coinigy = coinigy()
 ### Import a configuration file 
 import config 
 
-### TD analysis library
+### Price analysis library
 import tdlib as tdlib
 td_info = tdlib.tdlib()
 
@@ -66,10 +76,10 @@ platform = platform.platformlib()
 platform_run, cmd_init, cmd_init_buy = platform.initialise() 
 print "Initialising..."
 
-### Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
+### Set up the speedrun multiplier if need to test with higher speeds. Use any number - e.g. 1 is normal, 2 is 2x faster. 
 speedrun = config.speedrun
 
-### Telegram integration  
+### Telegram integration and preferred comm method 
 chat = telegram()
 
 comm_method = config.comm_method 
@@ -104,9 +114,11 @@ try:
         no_input = True 
 
     exchange_abbr = argv[2].lower()
-    if exchange_abbr not in ['btrx', 'bina', 'bmex']: 
+    if exchange_abbr not in config.exch_supported: 
         print 'Incorrect exchange specified (should be btrx, bina, or bmex)\n\n'
         exit(0)
+    
+    # Commissions and full exchange names     
     if exchange_abbr == 'btrx': 
         exchange = 'bittrex' 
         comission_rate = config.comission_rate_bittrex
@@ -116,7 +128,8 @@ try:
     elif exchange_abbr == 'bmex': 
         exchange = 'bitmex' 
         comission_rate = config.comission_rate_bitmex
-        
+    
+    # Market to trade     
     market = argv[3].upper()
     try:
         trade, currency = market.split('-')
@@ -124,10 +137,9 @@ try:
         trade = market  # e.g. if only one market vs BTC is provided - such as XRPH18 on bitmex  
         currency = 'BTC'
 
-    price_curr = float(argv[4])
-
-    price_target = float(argv[5])
-    sl_target = float(argv[6])
+    price_curr = float(argv[4])         # entry price 
+    price_target = float(argv[5])      # target price 
+    sl_target = float(argv[6])            # stop loss price
     price_entry = price_curr
 
     tp = round(price_target/price_curr, 5)
@@ -143,11 +155,11 @@ try:
         sell_portion = float(argv[8])
     except: 
         sell_portion = None    
-    # print 'Trade', trade, 'currency', currency, 'simulation', simulation, 'price_curr', price_curr, 'tp', tp, 'sl', sl, limit_sell_amount, sell_portion  #DEBUG   
+
 except:
     no_input = True 
 
-# Terminate if there is no proper input    
+# Terminate if the input is improper 
 if no_input:
     print '----------------------------------------------------------------------------------------------\n' + \
     'Run parameters not specified. Restart the script using:\n' + \
@@ -163,26 +175,18 @@ if simulation is True:
     simulation_balance = limit_sell_amount
     sell_portion = limit_sell_amount
 
-        
-### Prices 
-# something should be bought at a price_curr level to start from  
-
-price_target = price_curr*tp
-sl_target = price_curr*sl
-price_entry = price_curr
-
 #### Gmail login and pass (if used) 
-fromaddr = config.fromaddr   # replace to a proper address 
-toaddr = config.toaddr    # replace to a proper address 
+fromaddr = config.fromaddr   
+toaddr = config.toaddr    
 email_passw = config.email_passw
 
 ################################ Config - part II ############################################
 ### Intervals and timers in seconds  
 
-sleep_timer = config.sleep_timer                                    # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
+sleep_timer = config.sleep_timer                                      # Generic sleep timer. Applicable for the main monitoring loop and for the mooning procedure.
 sleep_timer_buyback = config.sleep_timer_buyback      # Sleep timer for buybacks 
-sleep_sale = config.sleep_sale                                      # Sleep timer for sell orders to be filled 
-flash_crash_ind = config.flash_crash_ind                      # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
+sleep_sale = config.sleep_sale                                          # Sleep timer for sell orders to be filled 
+flash_crash_ind = config.flash_crash_ind                         # If something falls so much too fast - it is unusual and we should not sell (checking for 50% crashes)
 
 ## Interval and number of checks to get current (last) prices 
 steps_ticker = config.steps_ticker  
@@ -204,14 +208,15 @@ cancel_buyback = False
 bitmex_margin = config.bitmex_margin    # size of margin on bitmex, minor for now 
 
 # Time analysis candles length 
-td_period = config.td_period   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up smaller time interval for dynamic stop losses and buy backs     
-td_period_extended = config.td_period_extended   # possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. This sets up larger time interval for buy backs (should be in line with the smaller one)         
-td_period_ext_opposite = config.td_period_ext_opposite    # for buybacks in the different direction (e.g. initiating short after going long first) 
+# Possible options are in line with ohlc (e.g. 1h, 4h, 1d, 3d); customisable. See config for details.   
+td_period = config.td_period   
+td_period_extended = config.td_period_extended    
+td_period_ext_opposite = config.td_period_ext_opposite    
 
-# Market reference for BTC 
+# Market reference for BTC (see config) 
 btc_market_reference = config.btc_market_reference
 
-### Starting variables  
+### Starting and default variables  
 main_curr_from_sell = 0     
 commission_total = 0        
 alt_sold_total = 0  
@@ -235,7 +240,7 @@ if market == 'USD-BTC' and exchange == 'bitmex' and btc_market_reference:       
     exchange_abbr_ref = config.exchange_abbr_ref
     print "Reference market {} on {}".format(market_ref, exchange_abbr_ref) 
 
-### Strategy and thresholds (for non-4H based action), contingency for TD (4h-based) action 
+### Strategy and thresholds for cases when there is no historical price data available
 if currency in ['XMR', 'DASH', 'ETH', 'LTC', 'XMR']: 
     strategy = 'alt-med'
     diff_threshold = 0.045
@@ -246,6 +251,7 @@ else:
     strategy = 'alt-volatile' 
     diff_threshold = 0.055
 
+### Contingency for price-based analysis (see config) 
 if strategy == 'btc': 
     var_contingency = config.var_contingency_btc
 else: 
@@ -264,7 +270,6 @@ def lprint(arr):
         print msg
     except: 
         print 'Failed to print output due to the IO error'
-
     
 ##############################################  
 ##            Core get price / moon / sell functions           ##
@@ -329,13 +334,10 @@ def get_last_price(market):
     failed_attempts = 0
     for i in range(1, steps_ticker + 1):
         try:
-            #ticker_upd = getticker(exchange, market) 
             ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd += ticker_upd
         except:
-            # print "Issues with URL (!) for market", market
             failed_attempts += 1
-            #time.sleep(sleep_ticker)
         
     # Logging failed attempts number
     if failed_attempts > 0: 
@@ -348,16 +350,17 @@ def get_last_price(market):
             send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         except: 
             lprint(["Failed to send notification"])    
+            
         while ticker_upd is None: 
             time.sleep(300) # sleeping for 5 minutes and checking again
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                #ticker_upd = getticker(exchange, market) 
                 ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
-    # If it is fine - get the average price 
+            
+    # Get the average price 
     else: 
         price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
         
@@ -375,7 +378,6 @@ def candle_extreme(type):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec); 80 x 3 for 4 minutes 
         try:
-            #ticker_upd = getticker(exchange, market) 
             ticker_upd = coinigy.price(exchange_abbr, market)
             price_upd = ticker_upd
             if type == 'L': 
@@ -385,7 +387,6 @@ def candle_extreme(type):
                 if (price_extreme == 0) or (price_upd > price_extreme): 
                     price_extreme = price_upd
         except:
-            #print "Issues with URL (!) for market", market
             failed_attempts += 1
         time.sleep(candle_sleep) 
         
@@ -395,7 +396,7 @@ def candle_extreme(type):
         
     # If retreiving prices fails completely
     if failed_attempts == steps_ticker:     
-        ticker_upd = None # Change
+        ticker_upd = None 
         # Could be related to maintenance
         try:
             send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
@@ -405,13 +406,11 @@ def candle_extreme(type):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                #ticker_upd = getticker(exchange, market) 
                 ticker_upd = coinigy.price(exchange_abbr, market)
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
             price_extreme = price_upd
-            
     return price_extreme
 
 ##################### Candle analysis; returns high, low, and whether the price crossed a value - among N-min intervals (candles) 
@@ -428,7 +427,6 @@ def candle_analysis(cross_target):
     
     for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
         try:
-            #ticker_upd = getticker(exchange, market) 
             ticker_upd = coinigy.price(exchange_abbr, market) 
             price_upd = ticker_upd
             if (price_l == 0) or (price_upd < price_l): 
@@ -438,7 +436,6 @@ def candle_analysis(cross_target):
             if price_upd >= cross_target: 
                 crossed_flag = True 
         except:
-            #print "Issues with URL (!) for market", market
             failed_attempts += 1
         time.sleep(candle_sleep) 
         
@@ -458,11 +455,11 @@ def candle_analysis(cross_target):
             time.sleep(300)  
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             try:
-                #ticker_upd = getticker(exchange, market) 
                 ticker_upd = coinigy.price(exchange_abbr, market) 
             except: 
                 ticker_upd = None
             price_upd = ticker_upd
+            
             # If unsuccessful
             price_l = 0
             price_h = 0
@@ -487,7 +484,7 @@ def buy_back(price_base):
     global bb_id, market, exchange_abbr, exchange, sleep_timer_buyback
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     global short_flag, td_period, td_period_extended, td_period_ext_opposite
-    global market_ref, exchange_abbr_ref
+    global market_ref, exchange_abbr_ref, diff_threshold, var_contingency
     
     direction = None # to return information on the direction of the new detected trend 
     bars_check_avail = None 
@@ -495,17 +492,11 @@ def buy_back(price_base):
     ### Greetings (for logs readability) 
     lprint(["###################### BUY_BACK ###########################"])
     
-    if strategy == 'btc': 
-        diff_threshold = 0.005 # threshold as a low/high +- 0.5% depending on the direction 
-    else: 
-        diff_threshold = 0.01 # 1% for alts 
-    
     flag_reb_c = True 
     td_first_run = True 
     bback_result = False 
 
     if td_data_available != True: ## using a simple 5-min candles analysis if there is no 4H price data 
-        # print "Base: ", price_base    #DEBUG 
         price_l_arr = np.zeros(5)        #5x5-min candlesticks
         price_h_arr = np.zeros(5)       #5x5-min candlesticks
         crossed_arr = np.bool(5)        # for crossed
@@ -632,9 +623,9 @@ def buy_back(price_base):
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
                 rows = query(sql_string)
             
-            # Checking if we should buy back 
+            ## Checking if we should buy back 
             # Check longs 
-            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 30) and (price_upd > (bars['high'].iloc[-2])*(1 + diff_threshold)):      # switching to long    
+            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 30) and (price_upd > (bars['high'].iloc[-2])*(1 + var_contingency)):      # switching to long    
                 # Depending on the short flag 
                 if not short_flag:  # same direction - checking bars_extended 
                     bars_check = bars_extended
@@ -649,8 +640,8 @@ def buy_back(price_base):
                     if bars_check_avail == False: 
                         lprint(["Note that higher - timeframe TD analysis is not available"])    
             
-            # Check shorts  
-            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - diff_threshold)) and (exchange == 'bitmex'):     # switching to short, only for bitmex       
+            # Check shorts, only for bitmex
+            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - var_contingency)) and (exchange == 'bitmex'):     
                 # This should _not_ be done on setup 7,8, or 9 
                 if (bars['td_setup'].iloc[-1] < 7):
                     # Depending on the short flag 
@@ -717,21 +708,6 @@ def sell_orders_info():
                 
                 for elem in orders_executed: 
                     order_info = getorder(exchange, market, elem)               
-                    ''' # Does not work due to data limitations - revise 
-                    if exchange == 'bitmex':         
-                        if order_info['Status'] != 'Canceled': 
-                            main_curr_from_sell += float(order_info['simpleCumQty'])    # this does not work, revise (all orders are reflected with 0 quantity remaining) 
-                        commission_total += 0 
-                        qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
-                        alt_sold_total += qty_sold             
-                        lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold, "BTC from sale", float(order_info['simpleCumQty']) ]) #DEBUG 
-                    else: 
-                        main_curr_from_sell += order_info['Price']  
-                        commission_total += order_info['CommissionPaid']
-                        qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
-                        alt_sold_total += qty_sold             
-                        lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
-                    ''' 
                     if exchange != 'bitmex': 
                         main_curr_from_sell += order_info['Price']  
                         commission_total += order_info['CommissionPaid']
@@ -788,10 +764,10 @@ def sell_orders_outcome():
             price_exit = float(main_curr_from_sell)/float(alt_sold_total)
         
         ''' 
-        # Bitmex: Does not work due to data limitations - revise 
+        # Bitmex: Does not work due to data limitations - revise using tradehistory
         # price_exit = float(contracts_start)/float(main_curr_from_sell)   # for bitmex, calculation is done through contracts    # commented until further fix
         ''' 
-        print  "Price exit calc: price_exit {}, contracts_start {}, main_curr_from_sell {}".format(price_exit, contracts_start, main_curr_from_sell) # DEBUG 
+        #print  "Price exit calc: price_exit {}, contracts_start {}, main_curr_from_sell {}".format(price_exit, contracts_start, main_curr_from_sell) # DEBUG 
             
         percent_gained = str(round(total_gained_perc, 2))
         trade_time = strftime("%Y-%m-%d %H:%M", localtime())
@@ -801,7 +777,7 @@ def sell_orders_outcome():
         
         # Send the notification about results    
         # To improve: if bitmex is used, margin should be accounted for 
-        msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  percent_gained , txt_result, str(price_entry), str(price_exit))
+        msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}, short_flag {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  str(percent_gained), txt_result, str(price_entry), str(price_exit), short_flag)
         send_notification('Finished', msg_result) 
         
         # Update the xls register 
@@ -843,20 +819,14 @@ def stop_reconfigure(mode = None):
     
     time_hour_update = time.strftime("%H")
     if (time_hour_update <> time_hour) or mode == 'now': 
+    
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
         bars_4h = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)     
 
-        ''' 
-        # Checking whether there was a price flip - previous logic 
-        if bars_4h['td_direction'].iloc[-1] != bars_4h['td_direction'].iloc[-2]: 
-            price_flip_upd = True 
-        else: 
-            price_flip_upd = False 
-        ''' 
         # New logic: return the TD direction of the last candle per td_interval 
-        price_direction_move = bars_4h['td_direction'].iloc[-1]      # returns 'up' or 'down' 
-        price_direction_move_previous = bars_4h['td_direction'].iloc[-2]      # returns 'up' or 'down' 
+        price_direction_move = bars_4h['td_direction'].iloc[-1]                         # returns 'up' or 'down' 
+        price_direction_move_previous = bars_4h['td_direction'].iloc[-2]        # returns 'up' or 'down' 
         #print "CHECK: short flag", short_flag, "price_direction", price_direction_move   #DEBUG
         
         # We will be considering that there is a price flip if we have a candle in setup with different colour which is followed by the same colour 
@@ -864,7 +834,7 @@ def stop_reconfigure(mode = None):
         if ((not short_flag and price_direction_move == 'down' and price_direction_move_previous == 'down') 
         or (short_flag and price_direction_move == 'up' and price_direction_move_previous == 'up')): 
             price_flip_upd = True 
-            #print ">>>>>> Price_flip_upd", price_flip_upd #DEBUG 
+            #print "> Price_flip_upd", price_flip_upd #DEBUG 
 
         if not short_flag: # the position is long 
             sl_target_upd = bars_4h['low'].iloc[-2] * (1 - var_contingency)   
@@ -872,6 +842,7 @@ def stop_reconfigure(mode = None):
             sl_p_upd = (1.0 - sl_upd)*100.0 
             if bars_4h['move_extreme'].iloc[-1]  is not None: 
                 sl_extreme_upd = bars_4h['move_extreme'].iloc[-1] * (1 - var_contingency)      
+                
         else: # the position is short 
             sl_target_upd = bars_4h['high'].iloc[-2] * (1 + var_contingency)   
             sl_upd = round(sl_target_upd/price_entry , 5) 
@@ -881,7 +852,7 @@ def stop_reconfigure(mode = None):
         
         lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
         lprint([  "New extreme stop value:", sl_extreme_upd ])
-        #print ">>> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
+        #print "> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
 
         # > DEBUG & COMMS
         status_update_previous = status_update
@@ -890,25 +861,6 @@ def stop_reconfigure(mode = None):
         if status_update != status_update_previous: 
             chat.send(status_update)
         # < DEBUG & COMMS
-    
-        ''' #Old code (old logic)
-        if short_flag != True: # LONGS  
-            if bars_4h['td_direction'].iloc[-1] == 'up': 
-                sl_target_upd = bars_4h['low'].iloc[-1] * (1 - var_contingency)   
-                sl_upd = round(sl_target_upd/price_entry , 5) 
-                sl_p_upd = (1.0 - sl_upd)*100.0 
-                lprint(["New stop loss level based on bullish TD:", sl_target_upd, "| price direction:", price_direction])
-            else:    
-                lprint(["No bullish 4H candle to update the stop loss"])  
-        else:  # SHORTS   
-            if bars_4h['td_direction'].iloc[-1] == 'down': 
-                sl_target_upd = bars_4h['high'].iloc[-1] * (1 + var_contingency)   
-                sl_upd = round(sl_target_upd/price_entry , 5) 
-                sl_p_upd = (1.0 + sl_upd)*100.0 
-                lprint(["New stop loss level based on bearish TD:", sl_target_upd, "| price direction:", price_direction])
-            else:    
-                lprint(["No bearish 4H candle to update the stop loss"])  
-        ''' 
         
     # Updating the db with the current SL value 
     if sl_target_upd is not None: 
@@ -917,9 +869,10 @@ def stop_reconfigure(mode = None):
     
     return price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd
             
-            
 ##################### Mooning trajectory procedure
-##################### Currently works in the same way as just the main cycle when TD price data is available (simply reconfiguring stops dynamically)        
+### Currently works in the same way as just the main cycle when TD price data is available (simply reconfiguring stops dynamically) 
+### Thus, there is no need to use it on price-based analysis
+       
 def to_the_moon(price_reached):     
     # Global variables used 
     global main_curr_from_sell, value_original, price_curr, commission_total, price_target, t_m_id, approved_flag, offset_check, comission_rate
@@ -929,22 +882,18 @@ def to_the_moon(price_reached):
     global trailing_stop_flag, start_time, bars, strategy, diff_threshold
     global sl, sl_target, sl_p
     global short_flag, price_flip, sl_extreme
-    global bars_4h
+    global bars_4h, var_contingency
 
     sale_trigger = False # default
     
     # Thresholds for post-profit fallback for BTC or ALTS, when detailed price data is not available 
-    if market == 'USDT-BTC': 
-        post_sl_level = 0.9745     # Fix of -2.55% for BTC
-    else: 
-        post_sl_level = 0.975    # Fix of -2.5% for all the post-profit cases (alts)  
-        
-    price_max = price_reached       # this will be changed mooning forward
-    price_cutoff = price_reached * post_sl_level   # to sell on original TP if we fall below 
+    post_sl_level = (1 - var_contingency)    
+    price_max = price_reached                                       # this will be changed mooning forward
+    price_cutoff = price_reached * post_sl_level          # to sell on original TP if we fall below 
     if td_data_available: 
         trailing_stop = sl_target 
     else: 
-        trailing_stop = price_max * post_sl_level    # to sell on new high * stop loss threshold   
+        trailing_stop = price_max * post_sl_level            # to sell on new high * stop loss threshold   
     
     lprint(["Mooning from:", price_max])   
     rocket_flag = True
@@ -997,24 +946,6 @@ def to_the_moon(price_reached):
                     sale_trigger = True 
                 lprint(["Sale trigger (post-profit)", sale_trigger])
             
-            # Also check for extreme moves out of the TD setup 
-            if sl_extreme is not None: 
-                if (short_flag and (price_last_moon > sl_extreme)) or (not short_flag and (price_last_moon < sl_extreme)): 
-                    lprint(["Breached TD extreme stop", price_last_moon])
-                    # Check if we need to sell
-                    if not td_data_available: 
-                        sale_trigger = ensure_sale(price_last_moon)   
-                    else: 
-                        sale_trigger = True 
-                    lprint(["Sale trigger", sale_trigger])
-            
-            ''' 
-            # Disabled to aim at longer time frames and time analysis 
-            # It is a good idea to sell at +45% when something is pumping 
-            if increase_info > 45:
-                sale_trigger = True 
-            ''' 
-            
             # Now checking sale trigger and selling if required         
             if sale_trigger == True:  
                 lprint(["Triggering trailing stop on", price_last])
@@ -1061,12 +992,12 @@ def to_the_moon(price_reached):
     # Finished the loop - returning the proper code
     return status
 
-##################### Anti-manipulation and anti-flash-crash filter for cases when we do not rely on time analysis (there is no data) 
+##################### Anti-manipulation and anti-flash-crash filter for cases when we do not rely on price time analysis  
 def ensure_sale(check_price): 
     global short_flag
     
-    proceed_sale = False           # default 
-    price_arr = np.zeros(3)         # 3 * N-min candlesticks  (see candle_extreme for N) 
+    proceed_sale = False           
+    price_arr = np.zeros(3)          # 3 * N-min candlesticks  (see candle_extreme for N) 
     lprint(["Running ensure_sale check"])
     
     ## Filling the prices array - will be checking for lower highs 
@@ -1112,21 +1043,7 @@ def ensure_sale(check_price):
                 lprint(["Cancelling ensure_sale since the price is back to normal"])  
                 proceed_sale = False
                 break
-                
- 
-    '''
-    # Not useful really considering the approach above
-    if short_flag != True: # LONGS  
-        if (price_arr.min() < (price_curr * flash_crash_ind)) and (0 not in price_arr):
-            lprint(["Ridiculously low price, better check it."])
-            chat.send(market +": ridiculously low price, better check it")
-            proceed_sale = False 
-    else: # SHORTS   
-        if (price_arr.max() > (price_curr * (1 - flash_crash_ind))) and (0 not in price_arr):
-            lprint(["Ridiculously high price, better check it."])
-            chat.send(market +": ridiculously high price, better check it")
-            proceed_sale = False 
-    ''' 
+
     return proceed_sale     
 
 ##################### Main sell function to sell at current prices   
@@ -1143,11 +1060,11 @@ def sell_now(at_price):
     proceed_w_sleep = False
     
     # Global variables used 
-    global main_curr_from_sell, value_original, price_curr, commission_total, simulation, currency, market, t_m_id, approved_flag, offset_check, simulation_balance, sell_portion, limit_sell_amount, comission_rate, exchange
-    global sleep_sale, steps_ticker, sleep_ticker
+    global main_curr_from_sell, value_original, price_curr, commission_total, simulation, currency, market, t_m_id
+    global approved_flag, offset_check, simulation_balance, sell_portion, limit_sell_amount, comission_rate, exchange
+    global sleep_sale, steps_ticker, sleep_ticker, balance_start, contracts_start, short_flag
     global db, cur, job_id
     global chat
-    global balance_start, contracts_start, short_flag
     
     # Starting balance for further use. Should be done with all orders cancelled
     cancel_orders(market)
@@ -1158,7 +1075,7 @@ def sell_now(at_price):
         balance_start  = Decimal('{0:.8f}'.format(balance['Available']))   # to correctly work with decimal numbers; not needed for bitmex 
 
         if exchange != 'bitmex':         
-            lprint(["Balance available to sell", balance_start])    #DEBUG
+            lprint(["Balance available to sell", balance_start])    
     
     if limit_sell_amount is not None: 
         limit_sell_amount = Decimal(str(limit_sell_amount))     # using str, we will not have more decimal numbers than needed
@@ -1249,7 +1166,7 @@ def sell_now(at_price):
                     decrease_attempts_total += 1
 
         # Decrease price more compared to last prices if required
-        if (decrease_price_step < 0.0255) and decrease_price_flag:      # changed the numbers here too
+        if (decrease_price_step < 0.0255) and decrease_price_flag:     
             if short_flag != True: #LONG
                 decrease_price_step += 0.001
                 lprint(["Sell price will be decreased on", decrease_price_step*100, "%"]) 
@@ -1362,7 +1279,7 @@ def sell_now(at_price):
                     else: 
                         sell_result = selllimit(exchange, market, sell_q_step, price_to_sell) 
                     
-                    lprint(["-------------------------------------------------------------------- \n>> Sell result:", sell_result, "\n--------------------------------------------------------------------"])  # DEBUG # 
+                    lprint(["-------------------------------------------------------------------- \n>> Sell result:", sell_result, "\n--------------------------------------------------------------------"])   
                     
                     if (sell_result == err_1) or (sell_result == err_2):
                         sell_run_flag = False
@@ -1496,8 +1413,12 @@ if limit_sell_amount > 0:
 
 ### Set up the margin on bitmex 
 if exchange == 'bitmex': 
-    set_margin = bitmex_leverage(market, bitmex_margin)
-    
+    try: # can give an error  
+        set_margin = bitmex_leverage(market, bitmex_margin)
+    except: 
+        lprint(["Cannot set the margin, check manually"])
+        chat.send("Cannot set the margin on bitmex, check manually")
+
 '''
 ######## Removed this - will not really be using SL (at least for now), also not applicable for shorts 
 # Check if TP is set higher than SL 
@@ -1506,12 +1427,11 @@ if tp < sl:
     lprint(["Take profit lower than stop loss, r u ok?"])
     exit(0)
 ''' 
-
-time_hour = time.strftime("%H")     # For periodic updates of 4H candles and stops 
+ 
+time_hour = time.strftime("%H")     # For periodic updates of TD candles and stops 
   
 # 1. Checking market correctness and URL validity, as well as protecting from fat fingers
 try: 
-    #ticker_upd = getticker(exchange, market) 
     ticker_upd = coinigy.price(exchange_abbr, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
@@ -1519,7 +1439,6 @@ try:
         while ticker_upd is None: 
             lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             time.sleep(300) # sleeping for 5 minutes and checking again
-            #ticker_upd = getticker(exchange, market) 
             ticker_upd = coinigy.price(exchange_abbr, market)
         
     if ticker_upd == 'INVALID_MARKET': 
@@ -1537,7 +1456,8 @@ try:
 except urllib2.URLError:
     terminate_w_message('Exchange url unavailable')
     logger.close_and_exit()
-   
+
+
 ### 2. Checking available balance. If bitmex - checking whether we have a long or a short position 
 if simulation != True: 
     balance = getbalance(exchange, currency)
@@ -1547,9 +1467,7 @@ if simulation != True:
     if exchange == 'bitmex': 
         bitmex_no_positions = True 
         positions = getpositions(exchange, market) 
-        #print "getpositions({}, {})".format(exchange, market)   #HERE 
         for position in positions: 
-            #print position  #HERE
             if position != {}: 
                 bitmex_no_positions = False 
                 if position['type'] == 'short':     # enabling short flag if the positions are in short 
@@ -1580,7 +1498,7 @@ start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)            # 35000 entries is enough for 4H and 9H analysis    
     
     try: 
         if bars == None: 
@@ -1668,6 +1586,7 @@ while run_flag and approved_flag:
         rows = query(sql_string)
         
         # Commenting for now because the current approach is always time & price based and the approach should not change when the TP is reached 
+        # Uncomment if you do not plan to use price analysis 
         ''' 
         ### Running the main conditions check to trigger take profit / stop loss 
         ## Checking TP reached - for longs / shorts 
@@ -1702,7 +1621,7 @@ while run_flag and approved_flag:
                 chat.send(market +": exiting based on the time candles (shorter period)")
                  
             # Checking for extreme moves 
-            if sl_extreme is not None:
+            if sl_extreme is not None and not sale_trigger:      # not sale trigger because we are checking this after the 4h-based candles price
                 if (short_flag and (price_last > sl_extreme)) or (not short_flag and (price_last < sl_extreme)): 
                     # Check if we need to sell
                     if not td_data_available: 
@@ -1714,9 +1633,14 @@ while run_flag and approved_flag:
                     chat.send(comm_string)
                     lprint([comm_string])
         
-            # Checking for nines and breaches of nines, if [-2] (before last) is nine and the price goes beyond the extreme of nine + (or -) contingency
+            # Checking for nines and breaches of nines
+            # Approach A: if [-2] (before last) is nine and the price goes beyond the extreme of nine + (or -) contingency
+            # Approach B: to take profit on 9 and then re-evaluate (currently implemented)        #!!!!CHANGE
             # bars_4h is a global var in the stop_reconfigure procedure
-            if td_data_available and not sale_trigger:      # because we are checking this after the extreme move breach
+            
+            ''' 
+            # Approach A
+            if td_data_available and not sale_trigger:     
                 if bars_4h['td_setup'].iloc[-2] == '9': 
                     if short_flag: #shorts 
                         if price_last > bars_4h['high'].iloc[-2]*(1 + var_contingency):
@@ -1728,7 +1652,15 @@ while run_flag and approved_flag:
                     comm_string = "{}: exiting based on 9-1 rule. Current price {}".format(market, price_last)
                     lprint([ comm_string ])
                     chat.send(comm_string)
-                 
+            '''     
+            # Approach B
+            if td_data_available and not sale_trigger:      
+                if bars_4h['td_setup'].iloc[-2] == '9': 
+                    sale_trigger = True    
+                    comm_string = "{}: exiting after 9 (taking profit for re-evaluation further). Current price {}".format(market, price_last)
+                    lprint([ comm_string ])
+                    chat.send(comm_string)
+            
             ### Stop loss triggered 
             if sale_trigger == True:       
                 # Stop-loss triggered
@@ -1740,7 +1672,6 @@ while run_flag and approved_flag:
                 lprint([stat_msg])
                 stopped_mode = 'pre-profit'     # used in buyback
                 stopped_price = sl_target          
-           
            
         # Check if selling now request has been initiated
         sell_init_flag = check_sell_flag()
@@ -1802,7 +1733,7 @@ except:
 ''' 
 if (stopped_mode == 'pre-profit') and (cancel_buyback == False): 
     if short_flag != True: # LONGS  
-        bb_price = price_exit * 0.9975  # Using value of price_exit (actual sell price) minus 0.25% (for non-TD-based price action) 
+        bb_price = price_exit * 0.9975  # Using value of price_exit (actual sell price) minus 0.25% (for non-TD-based price action only) 
     else: 
         bb_price = price_exit * 1.0025 # SHORTS  
     if td_data_available:  
@@ -1883,13 +1814,13 @@ try:
             # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
             
             if direction == 'up': #LONGS 
-                sl_price = bb_price * (1 - diff_threshold)  # depending on the strategy 
+                sl_price = bb_price * (1 - var_contingency)  # depending on the strategy 
                 tp_price = bb_price * tp
             elif direction == 'down': 
-                sl_price = bb_price * (1 + diff_threshold)  # depending on the strategy 
+                sl_price = bb_price * (1 + var_contingency)  # depending on the strategy 
                 tp_price = bb_price / tp
 
-            #print "bb_price {}, tp {}, diff_threshold {}, tp_price {}, sl_price {}".format(bb_price, tp, diff_threshold, tp_price, sl_price) # DEBUG 
+            #print "bb_price {}, tp {}, var_contingency {}, tp_price {}, sl_price {}".format(bb_price, tp, var_contingency, tp_price, sl_price) # DEBUG 
                 
             sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
             wf_id, rows = query_lastrow_id(sql_string)       
@@ -1916,6 +1847,7 @@ try:
             elif direction == 'down': #SHORTS - need to change plus to minus
                 python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
             print '>>>' + python_call
+            # Open in the same window 
             p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
             while True:
                 out = p.stderr.read(1)
@@ -1932,7 +1864,7 @@ try:
             sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
             rows = query(sql_string)
     
-    # If telegram stop - finalise and exit 
+    # If telegram stop - just finalise and exit 
     else:  
         logger.close_and_exit()
     
