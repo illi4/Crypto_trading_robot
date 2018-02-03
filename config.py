@@ -107,6 +107,8 @@ markets_list = [
     ['XLMH18', 'BMEX']    
 ]
 
+exch_supported = ['bmex', 'bina', 'btrx']
+
 ### Reference markets for BTC on bitmex (e.g. if we want to calculated the indicators based on values from a different exchange) 
 btc_market_reference = False  
 market_ref = 'BTC-USD'
