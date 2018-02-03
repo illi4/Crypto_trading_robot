@@ -42,19 +42,25 @@ dir_to = config.dir_to
 
 # List of cryptos   
 markets_list = config.markets_list
+usdt_exchanges_list = ['btrx', 'bina']   # exchanges list where you hold USDT - if it collapses, USDT is sold immediately into BTC 
 
 ################################ Code ############################################
-
-usdt_exchanges_list = ['btrx', 'bina']   # exchanges list where you hold USDT - if it collapses, USDT is sold immediately
-
 markets = []
 usdt_arr_min = []   # min for minute
 file_dict = {} 
 failed_attempts_dict = {}   # failed attempts 
 time_failed = {} 
 
+# Creating the price_log folder if required 
+directory = os.path.dirname('price_log')
+try:
+    os.stat('price_log')
+except:
+    os.mkdir('price_log') 
+
+# Getting file names 
 for elem in markets_list:
-    # There is an exception for bitmex and the naming there
+    # There is an exception for bitmex and the naming there (specific market) 
     if elem[0] == 'XBT-USD' and elem[1] == 'BMEX': 
         name_id = 'USD-BTC_bmex'
         filename = 'price_log/' + name_id + '.csv'
@@ -111,7 +117,7 @@ while True:
                     usdt_min_max = max(usdt_arr_min)
                     usdt_count = 0
                     usdt_arr_min = []
-                    # appending and deleting so that we have a continuous price array 
+                    # Appending and deleting so that we have a continuous price array 
                     usdt_price_arr = np.append(usdt_price_arr, usdt_min_max)
                     usdt_price_arr = np.delete(usdt_price_arr, [0])
                     print date_time, ':', 'USDT', usdt_min_max 
@@ -122,8 +128,7 @@ while True:
                     chat.send("Alarm: USDT-USD price has been below 0.93 for more than 15 minutes")
                     usdt_collapse = True 
 
-                    # Getting BTC for the whole balance in a case of collapse 
-                    # Buy depending on the platform 
+                    # Getting BTC for the whole balance in a case of collapse  
                     for usdt_exch_abbr in usdt_exchanges_list:                          
                         if platform_run == 'Windows': 
                             cmd_str = cmd_init_buy + ' '.join(['now', usdt_exch_abbr, 'USDT', 'BTC' ])       # buying for the whole balance     
