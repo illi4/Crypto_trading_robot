@@ -222,7 +222,7 @@ def bitmex_cancel(market, orderid):
 def bitmex_get_order(market, item): 
     market = market_std(market)    
     try: 
-        bitmex_order = bitmex.fetchOrders(symbol = market, since = None, limit = 300, params = {'filter' : json.dumps({"orderID":item})})[0]   #OLD  
+        bitmex_order = bitmex.fetchOrders(symbol = market, limit = 300, params = {'filter' : json.dumps({"orderID":item})})[0]     
         output = {}  
         output["OrderUuid"]  = bitmex_order["orderID"]
         output["Quantity"] = bitmex_order["orderQty"]
