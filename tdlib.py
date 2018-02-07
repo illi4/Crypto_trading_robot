@@ -16,7 +16,31 @@ time_delta = config.timedelta
 # TD analysis
 class tdlib(object):
     def __init__(self):
-        self.public = ['stats']
+        self.public = ['stats', 'stats_rsi_only']
+        self.rsi_df = None
+        
+    def RSI(self, window_length = 14):  # working on the dataframe of closed values 
+        # Get the difference in prices  
+        delta = self.rsi_df.diff()
+        
+        # Get rid of the first row, which is NaN since it did not have a previous 
+        # row to calculate the differences
+        delta = delta[1:] 
+        
+        # Make the positive gains (up) and negative gains (down) Series
+        up, down = delta.copy(), delta.copy()
+        up[up < 0] = 0
+        down[down > 0] = 0
+
+        # Calculate the EWMA
+        roll_up = pd.stats.moments.ewma(up, window_length)
+        roll_down = pd.stats.moments.ewma(down.abs(), window_length)
+
+        # Calculate the RSI based on EWMA
+        RS = roll_up / roll_down
+        RSI = 100.0 - (100.0 / (1.0 + RS))
+        
+        return RSI
         
     def stats(self, market, exch_use, period = '1h', nentries = 100000, tail = 10, short_flag = False, market_ref = None, exch_use_ref = None):
         # example period = '5min' 
@@ -69,6 +93,11 @@ class tdlib(object):
         size = bars['close'].size
         # print "TDLib: Bars df size:", size
         
+        # Calculate the RSI values 
+        self.rsi_df = bars['close']
+        bars['rsi'] = self.RSI(14)  # window length of 14
+        
+        # Calculated fields 
         bars.loc[:, 'td_setup'] = 0    # additional column: td setup number 
         bars.loc[:, 'td_direction'] = ''  # td setup direction 
         bars.loc[:, 'td_perfected'] = None # td setup perfection
@@ -78,7 +107,7 @@ class tdlib(object):
         bars.loc[:, 'td_up_2_close'] = None # for the further comparison  
         bars.loc[:, 'move_extreme'] = None # for stopping when the setup extreme is broken
         
-        # Try changing the types to preserve memory space
+        # Changing the types to preserve memory space
         bars['td_setup'] = pd.to_numeric(bars['td_setup'], errors='coerce')
         bars['td_down_1_high'] = pd.to_numeric(bars['td_down_1_high'], errors='coerce')     # careful - default None was changed to zero, otherwise we will get NaNs
         bars['td_up_2_close'] = pd.to_numeric(bars['td_up_2_close'], errors='coerce')       # same - careful 
@@ -247,4 +276,30 @@ class tdlib(object):
         gc.collect()
         
         return bars_return
+    
+    ### Only returning rsi 
+    def stats_rsi_only(self, market, exch_use, period = '1h', nentries = 100000, tail = 10, short_flag = False, market_ref = None, exch_use_ref = None):
+    
+        # Added for cases when we have a different reference exchange / market for calculating the TD 
+        if (market_ref is not None) and (exch_use_ref is not None): 
+            filename = 'price_log/' + market_ref + '_' + exch_use_ref.lower() + '.csv'
+        else: 
+            filename = 'price_log/' + market + '_' + exch_use.lower() + '.csv'       
+
+        try: 
+            transactions_all = pd.read_csv(filename, skiprows=1, names=['timestamp','price']).set_index('timestamp')
+        except: 
+            return None 
+        transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
+        transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
+        transactions_all['price'] = transactions_all.price.astype(float)
+        transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
+       
+        bars = transactions.price.resample(period, base = 7).ohlc()   
+ 
+        # Calculate the RSI values 
+        self.rsi_df = bars['close']
+        rsi_return = self.RSI(14)  # window length of 14
+        
+        return rsi_return
     

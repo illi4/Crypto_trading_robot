@@ -809,6 +809,7 @@ def stop_reconfigure(mode = None):
     global bars_4h 
     global market_ref, exchange_abbr_ref
     global status_update
+    global rsi_1h, rsi_4h 
     
     price_flip_upd = None # default is None   
     price_direction_move = None 
@@ -828,6 +829,10 @@ def stop_reconfigure(mode = None):
         price_direction_move = bars_4h['td_direction'].iloc[-1]                         # returns 'up' or 'down' 
         price_direction_move_previous = bars_4h['td_direction'].iloc[-2]        # returns 'up' or 'down' 
         #print "CHECK: short flag", short_flag, "price_direction", price_direction_move   #DEBUG
+        
+        # Update the RSI values 
+        rsi_4h = td_info.stats_rsi_only(market, exchange_abbr, '4h', 35000, 15, short_flag, market_ref, exchange_abbr_ref)[-1]     
+        rsi_1h = td_info.stats_rsi_only(market, exchange_abbr, '1h', 35000, 15, short_flag, market_ref, exchange_abbr_ref)[-1]      
         
         # We will be considering that there is a price flip if we have a candle in setup with different colour which is followed by the same colour 
         # So the rule will be for example if we are long and there is bearish flip, then there are 1 and 2 red -> price_flip_upd is true
@@ -858,6 +863,7 @@ def stop_reconfigure(mode = None):
         status_update_previous = status_update
         status_update = "Status update | {} {}: \nextreme_move stop {} \n4h-based stop {} \nprice flip confirmation {}".format(market, exchange_abbr, sl_extreme_upd, sl_target_upd, price_flip_upd)
         status_update += "\nTD: \ncurrent {} {} \nprevious {} {}".format(bars_4h['td_setup'].iloc[-1], bars_4h['td_direction'].iloc[-1], bars_4h['td_setup'].iloc[-2], bars_4h['td_direction'].iloc[-2])
+        status_update += "\nRSI: 4H {:.2f}, 1H {:.2f}".format(rsi_4h, rsi_1h)
         if status_update != status_update_previous: 
             chat.send(status_update)
         # < DEBUG & COMMS
@@ -1522,6 +1528,7 @@ if not td_data_available:
 if td_data_available: 
     lprint(["Reconfiguring stop loss level based on TD candles"])
     price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure('now')
+    
     #print ">>> Returned price_flip {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
     if sl_target_upd is not None: 
         sl_target = sl_target_upd
@@ -1661,11 +1668,24 @@ while run_flag and approved_flag:
                     lprint([ comm_string ])
                     chat.send(comm_string)
             
+            # Checking for RSI conditions 
+            # If short: take profit on 4h RSI < 26 and 1h RSI < 30, then usual reentry; 
+            # If long: 4h rsi >= 83.5, and 1h >= 81.5 then usual reentry; 
+            # these rules are empirical, find better values if you could 
+            # Variables rsi_4h, rsi_1h
+            if td_data_available and not sale_trigger:      
+                if ( ((short_flag) and (rsi_4h <= 26.5) and (rsi_1h <= 30)) or  
+                    ((not short_flag) and (rsi_4h >= 83.5) and (rsi_1h >= 81.5)) ): 
+                    sale_trigger = True             
+                    comm_string = "{}: taking profit based on extreme RSI value".format(market)
+                    chat.send(comm_string)
+                    lprint([comm_string])
+            
             ### Stop loss triggered 
             if sale_trigger == True:       
                 # Stop-loss triggered
                 lprint(["Triggering pre-profit stop loss on", price_last])
-                send_notification('Sell: SL', exchange + ' : ' + market + ': Triggering pre-moon stop loss at the level of ' + str(price_last))
+                send_notification('Sell: SL', exchange + ' : ' + market + ': Triggering stop loss at the level of ' + str(price_last))
                 status = sell_now(price_last)
                 # Handling results
                 run_flag, stat_msg = process_stat(status)

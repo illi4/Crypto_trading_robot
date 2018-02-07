@@ -1,7 +1,11 @@
 ############################### Configuration file ############################################################
 
 #### Price-related setup 
-bitmex_margin = 2       # margin level above 3x is not recommended 
+bitmex_margin = 2                                   # then change to 2x and 3x as soon as it works smoothly 
+
+# If bitmex_postpone_entries is True, buys are not executed on bitmex if there are contracts open already
+# Handy to have this enabled when you have a stop set manually but you would like to reenter as soon as possible in fullta mode after the stop is hit 
+bitmex_postpone_entries = True      
 
 #### Timers 
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 

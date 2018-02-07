@@ -564,10 +564,6 @@ if mode == 'fullta' and not td_data_available and not td_data_extended_available
     chat.send("Extended TD data is unavailable, not possible to start the task")
     logger.close_and_exit()
     
-### Inserting in the sqlite db if started fine  
-sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode, exchange) VALUES ('{}', 0, {}, {}, {}, '{}', '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode, exchange)
-job_id, rows = query_lastrow_id(sql_string)
-
 ### 3. Default values and starting balances / contracts 
 source_position = Decimal(str(source_position))
 ensure_balance() # added to modify the quantity on the start 
@@ -583,7 +579,31 @@ sum_quantity = 0
 approved_flag = True
 source_filled = 0
 issues_notify = True 
+positions_first_checked = True 
 
+### 3.9 Pre: if we are in the real mode and there are open positions on bitmex (e.g. we have set a stop manually) - postpone the execution 
+if (exchange == 'bitmex') and (wf_run_mode != 's') and (wf_run_mode != 'sns') and config.bitmex_postpone_entries:      
+    retry = True 
+    positions = getpositions(exchange, market)  
+    while retry: 
+        # Checking if there are contracts returned 
+        try: 
+            contracts_check =  positions[0]['contracts']
+            if positions_first_checked: 
+                lprint(['Positions are open on the market, holding on until ready...'])    
+                positions_first_checked = False 
+            time.sleep(sleep_timer)
+        except KeyboardInterrupt: 
+            exit(0) 
+        except: 
+            retry = False   
+    lprint(['No positions open, ready to start'])           
+         
+### Inserting in the sqlite db if started fine  
+sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode, exchange) VALUES ('{}', 0, {}, {}, {}, '{}', '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode, exchange)
+job_id, rows = query_lastrow_id(sql_string)
+         
+         
 ### 4. Main buying loop  
 while buy_flag and approved_flag: 
     buy_rate = 0                    # price 
