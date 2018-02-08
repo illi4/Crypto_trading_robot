@@ -15,7 +15,7 @@ However, provided that you are running price_logger to collect price data (see c
     * There is an exhaustion momentum indicator 9 on 4h bars.
     * RSI reaches extreme values on both 4h and 1h intervals (configurable) 
 - After closing a position, the automatic buyback logic is equivalent to buying in fullta mode and starting a task from there. 
-    
+
 The image below illustrates some of this logic: 
 
 ![candles_logic](images/candles_upd_z.png?raw=true "Candles_logic")
