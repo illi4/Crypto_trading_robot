@@ -226,7 +226,7 @@ contracts_start = 0
 stopped_mode = '' 
 short_flag = False # whether we are shorting, applicable for bitmex 
 bitmex_sell_avg = 0 # for bitmex price averaging 
-price_flip = None # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period). None by default 
+price_flip = False # for the confirmation of stops on the previous candle (should be a price flip there to stop, on td_period). False by default 
 price_exit = None 
 sl_extreme = None 
 sale_trigger = False  
@@ -811,7 +811,7 @@ def stop_reconfigure(mode = None):
     global status_update
     global rsi_1h, rsi_4h 
     
-    price_flip_upd = None # default is None   
+    price_flip_upd = False # default is False    
     price_direction_move = None 
     sl_target_upd = None 
     sl_upd = None 
@@ -857,6 +857,8 @@ def stop_reconfigure(mode = None):
         
         lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
         lprint([  "New extreme stop value:", sl_extreme_upd ])
+        lprint([  "Price flip analysis: {}, direction current: {}, direction previous: {}, short flag: {}".format(price_flip_upd, price_direction_move,
+        price_direction_move_previous, short_flag) ])
         #print "> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
 
         # > DEBUG & COMMS
