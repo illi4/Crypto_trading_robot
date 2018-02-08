@@ -47,7 +47,21 @@ from loglib import logfile # logging
 import platformlib as platform                                    # detecting the OS and assigning proper folders 
 
 # Universal functions for all exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances, binance_price_precise, binance_quantity_precise, getpositions, closepositions, bitmex_leverage
+from exchange_func import (getticker, 
+                                                 getopenorders, 
+                                                 cancel, 
+                                                 getorderhistory, 
+                                                 getorder, 
+                                                 getbalance, 
+                                                 selllimit, 
+                                                 getorderbook, 
+                                                 buylimit, 
+                                                 getbalances, 
+                                                 binance_price_precise, 
+                                                 binance_quantity_precise, 
+                                                 getpositions, 
+                                                 closepositions, 
+                                                 bitmex_leverage)
 
 # Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
 from coinigylib import coinigy 
