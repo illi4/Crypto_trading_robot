@@ -4,7 +4,7 @@ import urllib2
 import time
 
 # Import exchanges library ticker in case coinigy api fails to get a price 
-from exchange_func import getticker
+from exchange_func import getticker, market_std
 
 # Config 
 import config 
@@ -23,8 +23,12 @@ class coinigy(object):
         exchange = exchange.upper()
         
         # For bitmex, USD-BTC ticker is available through the XBTUSD product 
-        if (ticker == 'BTC-USD' or ticker == 'USD-BTC') and exchange == 'BMEX':
+        if (ticker == 'BTC-USD' or ticker == 'USD-BTC' or ticker == 'XBT-USD') and exchange == 'BMEX':
             ticker = 'XBTUSD'  
+        
+        # Changing the ticker for coinigy if we are working with exchanges other than bitmex 
+        if exchange != 'BMEX':
+            ticker = market_std(ticker)
         
         # Checking the price 
         while count < 3:    # several attempts to handle availability / overload issues 
@@ -33,6 +37,7 @@ class coinigy(object):
                     "exchange_code": exchange, 
                     "exchange_market": ticker
                   }
+                
                 req = urllib2.Request('https://api.coinigy.com/api/v1/ticker')
                 req.add_header('x-api-key', self.key)
                 req.add_header('x-api-secret', self.secret)

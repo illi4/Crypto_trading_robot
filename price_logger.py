@@ -15,7 +15,18 @@ from sys import exit, argv
 import os
 
 # Universal functions for all the exchanges 
-from exchange_func import getticker, getopenorders, cancel, getorderhistory, getorder, getbalance, selllimit, getorderbook, buylimit, getbalances  
+from exchange_func import (getticker, 
+                                                  getopenorders, 
+                                                  cancel, 
+                                                  getorderhistory, 
+                                                  getorder, 
+                                                  getbalance, 
+                                                  selllimit, 
+                                                  getorderbook, 
+                                                  buylimit, 
+                                                  getbalances, 
+                                                  market_std) 
+                                                  
 from telegramlib import telegram # my lib to work with Telegram   
 import platformlib as platform  # detecting the OS and assigning proper folders 
 from coinigylib import coinigy
@@ -95,7 +106,7 @@ while True:
     # Updating crypto prices 
     for elem in markets_list: 
         name_id = elem[0] + '_' + elem[1].lower()
-        elem_ticker = elem[0].replace('-', '/') 
+        elem_ticker = elem[0]
         try: 
             price = coinigy.price(elem[1], elem_ticker)
         except: 

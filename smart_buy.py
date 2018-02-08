@@ -790,8 +790,8 @@ while buy_flag and approved_flag:
      
         ### If meeting conditions for fixed price - get the current price   
         if fixed_price_flag and fixed_price_starter: 
-            # Changes - in fullta mode, analyse for the best price 
-            if (mode == 'fullta') or (mode == '4h'): 
+            # Changes - in fullta mode, analyse for the best price - fix for all the exchanges as binance yeilds weird results 
+            if (((mode == 'fullta') or (mode == '4h')) and (exchange == 'bitmex')):
                 # When we are long, on the enter we buy -> get the price from asks (the lowest ask (sell price) which is the first in the array)
                 # When we are short, on the enter we sell -> get the price from bids (the highest bid (buy price), which is the first in the array)
                 if not short_flag: #LONG

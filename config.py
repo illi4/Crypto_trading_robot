@@ -97,8 +97,8 @@ comission_rate_bitmex = 0                     # no commissions as such when open
 markets_list = [
     ['XBT-USD' , 'BMEX'],           # abbreviations are consistent with coinigy
     ['BTC-USD' , 'BITF'],      
-    ['OST-BTC', 'BINA'],  
-    ['NANO-BTC', 'BINA'],  
+    ['BTC-OST', 'BINA'],  
+    ['BTC-NANO', 'BINA'],  
     ['XRPH18', 'BMEX'], 
     ['ADAH18', 'BMEX'], 
     ['ETHH18', 'BMEX'], 
@@ -111,7 +111,7 @@ markets_list = [
     ['XLMH18', 'BMEX']    
 ]
 
-exch_supported = ['bmex', 'bina', 'btrx']
+exch_supported = ['bmex', 'bina', 'btrx']   # list of supported exchanges 
 
 ### Reference markets for BTC on bitmex (e.g. if we want to calculated the indicators based on values from a different exchange) 
 btc_market_reference = False  
