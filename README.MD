@@ -10,9 +10,9 @@ However, provided that you are running price_logger to collect price data (see c
 - Price action is analysed on shorter (4-hour) and longer (9-hour) intervals (configurable). 
 - In the 'fullta' mode, smart_buy opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus default contingency % configured in the scripts). 
 - When the job is running, profit can be taken or the position can be stopped with loss if: 
-    * There is a price flip in the opposite direction on 4h (configurable), and the current 4h starts trading beyond the previous one. 
+    * There is a price flip in the opposite direction on 4h (configurable), and the current 4h starts trading beyond the previous one +/- a threshold (configurable). 
     * There is an extreme move piercing through the whole price setup starting from the number one.  
-    * There is an exhaustion nine on 4h bars.
+    * There is an exhaustion momentum indicator 9 on 4h bars.
     * RSI reaches extreme values on both 4h and 1h intervals (configurable) 
 - After closing a position, the automatic buyback logic is equivalent to buying in fullta mode and starting a task from there. 
     
