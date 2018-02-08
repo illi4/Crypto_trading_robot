@@ -1642,7 +1642,7 @@ while run_flag and approved_flag:
         
             # Checking for nines and breaches of nines
             # Approach A: if [-2] (before last) is nine and the price goes beyond the extreme of nine + (or -) contingency
-            # Approach B: to take profit on 9 and then re-evaluate (currently implemented)        #!!!!CHANGE
+            # Approach B: to take profit just right after the TD 9, and then re-evaluate (currently implemented)     
             # bars_4h is a global var in the stop_reconfigure procedure
             
             ''' 
@@ -1660,7 +1660,7 @@ while run_flag and approved_flag:
                     lprint([ comm_string ])
                     chat.send(comm_string)
             '''     
-            # Approach B
+            # Approach B 
             if td_data_available and not sale_trigger:      
                 if bars_4h['td_setup'].iloc[-2] == '9': 
                     sale_trigger = True    
@@ -1673,6 +1673,7 @@ while run_flag and approved_flag:
             # If long: 4h rsi >= 83.5, and 1h >= 81.5 then usual reentry; 
             # these rules are empirical, find better values if you could 
             # Variables rsi_4h, rsi_1h
+            
             if td_data_available and not sale_trigger:      
                 if ( ((short_flag) and (rsi_4h <= 26.5) and (rsi_1h <= 30)) or  
                     ((not short_flag) and (rsi_4h >= 83.5) and (rsi_1h >= 81.5)) ): 
