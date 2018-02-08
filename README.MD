@@ -2,17 +2,18 @@
 
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by the Wall Street. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bittrex, binance, and bitmex.
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by the Wall Street. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
 
-Note that this is not a fully automated bot which works with no intervention all the time but rather a helper. You will still need to decide at least when to enter into the position and what kind of initial stops to set up. I also recommend to analyse the price action and exit your positions thoroughly in parallel with the script running. 
+Note that this is not a fully automated bot which works extremely well with no intervention all the time but rather a helper. You would at least need to decide when to open a position and what kind of initial stops would you like to set up. I also recommend analysing the price action and exit your positions deliberately at the best time (good luck with that, though).   
 
-However, provided that you are running price_logger to collect price data (see below for clarifications), you can leave the bot running for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 9 hours) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
-- Price action is analysed on 4-hour and 9-hour intervals 
+However, provided that you are running price_logger to collect price data (see clarifications further), you can just leave the bot running for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 9 hours) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
+- Price action is analysed on shorter (4-hour) and longer (9-hour) intervals (configurable). 
 - In the 'fullta' mode, smart_buy opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus default contingency % configured in the scripts). 
-- When the job is running, the position can be stopped if: 
-    * There is a price flip in the opposite direction on 4h, and the current 4h starts trading beyond the previous one. 
+- When the job is running, profit can be taken or the position can be stopped with loss if: 
+    * There is a price flip in the opposite direction on 4h (configurable), and the current 4h starts trading beyond the previous one. 
     * There is an extreme move piercing through the whole price setup starting from the number one.  
-    * There is an exhaustion nine which is followed by price dropping (or going above in shorts) the nine's low (high in shorts). 
+    * There is an exhaustion nine on 4h bars.
+    * RSI reaches extreme values on both 4h and 1h intervals (configurable) 
 - After closing a position, the automatic buyback logic is equivalent to buying in fullta mode and starting a task from there. 
     
 The image below illustrates some of this logic: 
