@@ -22,3 +22,4 @@ def query_lastrow_id(sql):
         con.commit()
         con.close()
     return last_id, res 
+ 

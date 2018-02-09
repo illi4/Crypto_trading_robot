@@ -18,9 +18,6 @@ from sys import exit, argv
 from time import localtime, strftime
 import subprocess   
 import math
-import smtplib
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
 import urllib2
 import decimal
 from decimal import Decimal
@@ -40,6 +37,8 @@ from telegramlib import telegram                            # my lib to work wit
 from sqltools import query_lastrow_id, query        # proper requests to sqlite db
 from loglib import logfile                                          # logging 
 import platformlib as platform                                  # detecting the OS and setting proper folders 
+import aux_functions               # various auxiliary functions   
+aux_functions = aux_functions.aux_functions()
 
 # Universal functions for all exchanges              
 from exchange_func import (getticker, 
@@ -56,7 +55,8 @@ from exchange_func import (getticker,
                                                   binance_quantity_precise, 
                                                   getpositions, 
                                                   closepositions, 
-                                                  bitmex_leverage)
+                                                  bitmex_leverage, 
+                                                  cancel_orders)
 
 # Using coinigy to get prices so that there are no stringent restrictions on api request rates (frequency)
 from coinigylib import coinigy 
@@ -81,9 +81,6 @@ speedrun = config.speedrun
 
 ### Telegram integration and preferred comm method 
 chat = telegram()
-
-comm_method = config.comm_method 
-send_messages = True
 
 ### Command prompt parameters  
 
@@ -176,9 +173,9 @@ if simulation is True:
     sell_portion = limit_sell_amount
 
 #### Gmail login and pass (if used) 
-fromaddr = config.fromaddr   
-toaddr = config.toaddr    
-email_passw = config.email_passw
+#fromaddr = config.fromaddr   
+#toaddr = config.toaddr    
+#email_passw = config.email_passw
 
 ################################ Config - part II ############################################
 ### Intervals and timers in seconds  
@@ -257,41 +254,17 @@ if strategy == 'btc':
 else: 
     var_contingency = config.var_contingency_alt
 
-# Logger
+# Logger initialisation    
 logger = logfile(market, 'trade')
-
-################################ Functions ############################################
-
-### Log and print 
-def lprint(arr):
-    msg = ' '.join(map(lambda x: ''+ str(x), arr))
-    try: 
-        logger.write(msg)
-        print msg
-    except: 
-        print 'Failed to print output due to the IO error'
+ 
     
 ##############################################  
 ##            Core get price / moon / sell functions           ##
 ##############################################
-
-##################### Price comparison  
-def strictly_increasing(L):
-    return all(x<y for x, y in zip(L, L[1:]))
-   
-def equal_or_increasing(L):
-    return all(x<=y for x, y in zip(L, L[1:]))
-
-def strictly_decreasing(L):
-    return all(x>y for x, y in zip(L, L[1:]))
     
-def equal_or_decreasing(L):
-    # Actually >= for our purposes
-    return all(x>=y for x, y in zip(L, L[1:]))
-
 ##################### Processing sell outcome results and generating messages 
 def process_stat(status): 
-    global market
+    global exchange, market
     global db, cur, job_id
     global cancel_buyback 
     
@@ -305,166 +278,26 @@ def process_stat(status):
 
     if status == 'err_low': 
         message = 'Trade amount was too small and returned error, finishing up'
-        send_notification('Error: Too small trade', 'Too small trade to perform, finishing up')
-        cancel_orders(market)
+        aux_functions.send_notification(market, chat, 'Error: Too small trade', 'Too small trade to perform, finishing up')       
+        cancel_orders(exchange, market)
         flag = False
         cancel_buyback = True 
         
     if status == 'no_idea': 
         message = 'Sell calls did not return proper answer, aborting'
-        send_notification('Error: No response from sell calls', 'Sell calls did not return proper answer, aborting')
-        cancel_orders(market)
+        aux_functions.send_notification(market, chat, 'Error: No response from sell calls', 'Sell calls did not return proper answer, aborting')       
+        cancel_orders(exchange, market)
         flag = False
         cancel_buyback = True 
         
     if status == 'abort_telegram': 
         message = 'Aborted as requested via Telegram'
-        cancel_orders(market)
+        cancel_orders(exchange, market)
         flag = False
         cancel_buyback = True 
         
     return flag, message
 
-##################### Getting several last prices in short intervals instead of just one 
-def get_last_price(market): 
-    global exchange, exchange_abbr, coinigy
-    
-    ticker_upd = {}
-    price_upd = 0
-    failed_attempts = 0
-    for i in range(1, steps_ticker + 1):
-        try:
-            ticker_upd = coinigy.price(exchange_abbr, market)
-            price_upd += ticker_upd
-        except:
-            failed_attempts += 1
-        
-    # Logging failed attempts number
-    if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])    
-        
-    # If retreiving prices fails completely
-    if failed_attempts == steps_ticker:     
-        ticker_upd = None  
-        try:
-            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
-        except: 
-            lprint(["Failed to send notification"])    
-            
-        while ticker_upd is None: 
-            time.sleep(300) # sleeping for 5 minutes and checking again
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
-            try:
-                ticker_upd = coinigy.price(exchange_abbr, market)
-            except: 
-                ticker_upd = None
-            price_upd = ticker_upd
-            
-    # Get the average price 
-    else: 
-        price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
-        
-    return price_upd
-
-##################### Extreme in time series; returns value with the lowest or the highest ticker price among N-min intervals (candles) 
-# type should be 'H' or 'L' (highest ore lowest in the series) 
-def candle_extreme(type): 
-    global exchange, exchange_abbr, market, candle_steps, candle_sleep
-    global coinigy 
-    ticker_upd = {}
-    price_upd = 0
-    price_extreme = 0
-    failed_attempts = 0
-    
-    for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec); 80 x 3 for 4 minutes 
-        try:
-            ticker_upd = coinigy.price(exchange_abbr, market)
-            price_upd = ticker_upd
-            if type == 'L': 
-                if (price_extreme == 0) or (price_upd < price_extreme): 
-                    price_extreme = price_upd
-            if type == 'H': 
-                if (price_extreme == 0) or (price_upd > price_extreme): 
-                    price_extreme = price_upd
-        except:
-            failed_attempts += 1
-        time.sleep(candle_sleep) 
-        
-    # Logging failed attempts number
-    if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])    
-        
-    # If retreiving prices fails completely
-    if failed_attempts == steps_ticker:     
-        ticker_upd = None 
-        # Could be related to maintenance
-        try:
-            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
-        except: 
-            lprint(["Failed to send notification"])    
-        while ticker_upd is None: 
-            time.sleep(300)  
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
-            try:
-                ticker_upd = coinigy.price(exchange_abbr, market)
-            except: 
-                ticker_upd = None
-            price_upd = ticker_upd
-            price_extreme = price_upd
-    return price_extreme
-
-##################### Candle analysis; returns high, low, and whether the price crossed a value - among N-min intervals (candles) 
-def candle_analysis(cross_target): 
-    global market, candle_steps, candle_sleep
-    global exchange, exchange_abbr, coinigy 
-    
-    ticker_upd = {}
-    price_upd = 0
-    price_h = 0
-    price_l = 0 
-    crossed_flag = False
-    failed_attempts = 0
-    
-    for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
-        try:
-            ticker_upd = coinigy.price(exchange_abbr, market) 
-            price_upd = ticker_upd
-            if (price_l == 0) or (price_upd < price_l): 
-                price_l = price_upd
-            if (price_h == 0) or (price_upd > price_h): 
-                price_h = price_upd
-            if price_upd >= cross_target: 
-                crossed_flag = True 
-        except:
-            failed_attempts += 1
-        time.sleep(candle_sleep) 
-        
-    # Logging failed attempts number
-    if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])    
-    
-    # If retreiving prices fails completely
-    if failed_attempts == steps_ticker:     
-        ticker_upd = None  
-        # Could be related to maintenance
-        try:
-            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
-        except: 
-            lprint(["Failed to send notification"])    
-        while ticker_upd is None: 
-            time.sleep(300)  
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
-            try:
-                ticker_upd = coinigy.price(exchange_abbr, market) 
-            except: 
-                ticker_upd = None
-            price_upd = ticker_upd
-            
-            # If unsuccessful
-            price_l = 0
-            price_h = 0
-    return price_l, price_h, crossed_flag
-    
 ##################### Checking if we need to stop buyback
 def check_bb_flag():
     global market 
@@ -485,12 +318,13 @@ def buy_back(price_base):
     global td_data_available, start_time, bars, strategy, time_bb_initiated # bars actually need to be recalculated as 1h is used for buyback
     global short_flag, td_period, td_period_extended, td_period_ext_opposite
     global market_ref, exchange_abbr_ref, diff_threshold, var_contingency
+    global aux_functions, coinigy
     
-    direction = None # to return information on the direction of the new detected trend 
+    direction = None                        # to return information on the direction of the new detected trend 
     bars_check_avail = None 
 
     ### Greetings (for logs readability) 
-    lprint(["###################### BUY_BACK ###########################"])
+    logger.lprint(["###################### BUY_BACK ###########################"])
     
     flag_reb_c = True 
     td_first_run = True 
@@ -500,14 +334,14 @@ def buy_back(price_base):
         price_l_arr = np.zeros(5)        #5x5-min candlesticks
         price_h_arr = np.zeros(5)       #5x5-min candlesticks
         crossed_arr = np.bool(5)        # for crossed
-        lprint([market, ': filling the price array'])
+        logger.lprint([market, ': filling the price array'])
         
         bback_result_long = False 
         bback_result_short = False 
         
         # Filling the prices array with 5x5min candles
         while 0 in price_l_arr: 
-            price_l, price_h, crossed_flag = candle_analysis(price_base)
+            price_l, price_h, crossed_flag = coinigy.candle_analysis(exchange, exchange_abbr, market, logger, price_base)
             price_l_arr = np.append(price_l_arr, price_l)
             price_h_arr = np.append(price_l_arr, price_l)
             crossed_arr = np.append(crossed_arr, crossed_flag)
@@ -520,15 +354,15 @@ def buy_back(price_base):
         while flag_reb_c: 
             crossed_conf = (True in crossed_arr)                            # Any of candles should cross price_base   
             # LONGS check 
-            lows_conf = equal_or_increasing(price_l_arr)                 # Higher or equal lows
+            lows_conf = aux_functions.equal_or_increasing(price_l_arr)                 # Higher or equal lows
             num_conf_long = ((price_h_arr >= price_base).sum()) >= 3     # At least 3 of 5 candles highs should be equal or above x
             bback_result_long = bool(lows_conf * crossed_conf * num_conf_long)
-            lprint([market, ": base", price_base, '| lows holding or higher', lows_conf, '| highs lower than base confirmation:', num_conf_long, '| crossed flag:', crossed_conf, '| result (long):', bback_result_long])
+            logger.lprint([market, ": base", price_base, '| lows holding or higher', lows_conf, '| highs lower than base confirmation:', num_conf_long, '| crossed flag:', crossed_conf, '| result (long):', bback_result_long])
             # SHORTS check
-            highs_conf = equal_or_decreasing(price_l_arr)                 # Lower or equal highs
+            highs_conf = aux_functions.equal_or_decreasing(price_l_arr)                 # Lower or equal highs
             num_conf_short = ((price_l_arr <= price_base).sum()) >= 3     # At least 3 of 5 candles lows should be equal or below x
             bback_result_short = bool(highs_conf * crossed_conf * num_conf_short)
-            lprint([market, ": base", price_base, '| highs holding or lower', highs_conf, '| highs lower than base confirmation:', num_conf_short, '| crossed flag:', crossed_conf, '| result (short):', bback_result_short])
+            logger.lprint([market, ": base", price_base, '| highs holding or lower', highs_conf, '| highs lower than base confirmation:', num_conf_short, '| crossed flag:', crossed_conf, '| result (short):', bback_result_short])
             
             # Check if we need to cancel 
             stop_bback = check_bb_flag()
@@ -540,16 +374,16 @@ def buy_back(price_base):
             if bback_result_long: 
                 bback_result = True
                 direction = 'up' 
-                lprint([market, ": initiating buyback"])
+                logger.lprint([market, ": initiating buyback"])
                 flag_reb_c = False 
             if bback_result_short: 
                 bback_result = True
                 direction = 'down' 
-                lprint([market, ": initiating buyback"])
+                logger.lprint([market, ": initiating buyback"])
                 flag_reb_c = False 
                 
             # Get new values 
-            price_l, price_h, crossed_flag = candle_analysis(price_base)
+            price_l, price_h, crossed_flag = coinigy.candle_analysis(exchange, exchange_abbr, market, logger, price_base)
             price_l_arr = np.append(price_l_arr, price_l)
             price_h_arr = np.append(price_l_arr, price_l)
             crossed_arr = np.append(crossed_arr, crossed_flag)
@@ -604,19 +438,20 @@ def buy_back(price_base):
             time_elapsed = (math.ceil(time.time() - time_bb_initiated ))/60    
             
             # Getting the current price and showing info on potential longs or potential shorts 
-            price_upd = get_last_price(market)
+            price_upd = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
+            
             if bars['td_direction'].iloc[-2] == 'up': #LONGS potential 
-                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle high:", bars['high'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
+                logger.lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle high:", bars['high'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
                 if bars_check_avail: 
-                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
+                    logger.lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
                 else: 
-                    lprint(["Extended timeframe price data unavailable"])    
+                    logger.lprint(["Extended timeframe price data unavailable"])    
             elif (bars['td_direction'].iloc[-2] == 'down') and (exchange == 'bitmex'): #SHORTS potential, only for bitmex 
-                lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle low:", bars['low'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
+                logger.lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle low:", bars['low'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
                 if bars_check_avail: 
-                    lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
+                    logger.lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
                 else: 
-                    lprint(["Extended timeframe price data unavailable"])    
+                    logger.lprint(["Extended timeframe price data unavailable"])    
                     
             # Updating DB
             if bb_id is not None: 
@@ -636,9 +471,9 @@ def buy_back(price_base):
                     bback_result = True 
                     direction = 'up'
                     flag_reb_c = False 
-                    lprint(["TD buyback initiated on the long side"])
+                    logger.lprint(["TD buyback initiated on the long side"])
                     if bars_check_avail == False: 
-                        lprint(["Note that higher - timeframe TD analysis is not available"])    
+                        logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Check shorts, only for bitmex
             if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - var_contingency)) and (exchange == 'bitmex'):     
@@ -654,9 +489,9 @@ def buy_back(price_base):
                         bback_result = True 
                         direction = 'down'
                         flag_reb_c = False 
-                        lprint(["TD buyback initiated on the short side"])
+                        logger.lprint(["TD buyback initiated on the short side"])
                         if bars_check_avail == False: 
-                            lprint(["Note that higher - timeframe TD analysis is not available"])    
+                            logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Sleeping 
             time.sleep(sleep_timer_buyback)     
@@ -664,24 +499,11 @@ def buy_back(price_base):
     # Finishing up 
     return bback_result, direction
     
-##################### Cancelling active orders on particular market if there are any 
-def cancel_orders(market):    
-    my_orders = getopenorders(exchange, market)
-    # print "Orders", my_orders #DEBUG 
-    if my_orders <> '': 
-        for val in my_orders:
-            lprint(["Cancelling open order:", val['OrderUuid'], "quantity", val['Quantity'], 
-                   "quantity remaining", val['QuantityRemaining'], "limit", val['Limit'], "price", val['Price']
-                   ])
-            cancel_stat = cancel(exchange, market, val['OrderUuid'])
-            
-            # Wait for a moment if needed 
-            # time.sleep(1)
 
 ##################### Update information on performed orders
 def sell_orders_info():
     global simulation, main_curr_from_sell, commission_total, alt_sold_total, orders_start, no_sell_orders, market, limit_sell_amount
-    global exchange 
+    global exchange, exchange_abbr, logger 
     global price_exit, bitmex_sell_avg
     
     # Updating order history to collect information on new orders (disable in the simulation mode)
@@ -701,10 +523,10 @@ def sell_orders_info():
             orders_executed = orders_new.symmetric_difference(orders_start) 
      
             if orders_executed == set([]):
-                lprint(["No sell orders executed"])
+                logger.lprint(["No sell orders executed"])
                 no_sell_orders = True 
             else:
-                lprint(["New executed orders"])  
+                logger.lprint(["New executed orders"])  
                 
                 for elem in orders_executed: 
                     order_info = getorder(exchange, market, elem)               
@@ -713,7 +535,7 @@ def sell_orders_info():
                         commission_total += order_info['CommissionPaid']
                         qty_sold = order_info['Quantity'] - order_info['QuantityRemaining'] 
                         alt_sold_total += qty_sold                            
-                        lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
+                        logger.lprint([">", elem, "price", order_info['Price'], "quantity sold", qty_sold ]) #DEBUG 
                     else: 
                         price_exit = bitmex_sell_avg
                         if price_exit != 0: 
@@ -721,11 +543,11 @@ def sell_orders_info():
                                 main_curr_from_sell = contracts_start/price_exit
                             else: 
                                 main_curr_from_sell = contracts_start*price_exit
-                lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
+                logger.lprint(["Total price", main_curr_from_sell, "alts sold total", alt_sold_total]) #DEBUG
         else:
             # If the simulation is True - main_curr_from_sell will have simulated value and the commission would be zero. Updating quantity. 
             alt_sold_total = limit_sell_amount
-            price_exit = get_last_price(market)
+            price_exit = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
             if exchange == 'bitmex': 
                 if market == 'USD-BTC': 
                     main_curr_from_sell = contracts_start/price_exit
@@ -735,7 +557,7 @@ def sell_orders_info():
     except: 
         err_msg = traceback.format_exc()
         comm_string = 'Could not het sell orders history from {} on {}. Reason: {}. Check the results'.format(market, exchange, err_msg)
-        lprint([comm_string])    
+        logger.lprint([comm_string])    
         chat.send(comm_string)  
     
 ##################### Sell orders outcome 
@@ -772,13 +594,13 @@ def sell_orders_outcome():
         percent_gained = str(round(total_gained_perc, 2))
         trade_time = strftime("%Y-%m-%d %H:%M", localtime())
         
-        lprint(['Total from all sales', main_curr_from_sell, 'total commission', commission_total])
-        lprint(['Profit ', total_gained, ':', round(total_gained_perc, 2), '%']) 
+        logger.lprint(['Total from all sales', main_curr_from_sell, 'total commission', commission_total])
+        logger.lprint(['Profit ', total_gained, ':', round(total_gained_perc, 2), '%']) 
         
         # Send the notification about results    
         # To improve: if bitmex is used, margin should be accounted for 
         msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}, short_flag {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  str(percent_gained), txt_result, str(price_entry), str(price_exit), short_flag)
-        send_notification('Finished', msg_result) 
+        aux_functions.send_notification(market, chat, 'Finished', msg_result) 
         
         # Update the xls register 
         try:
@@ -797,7 +619,7 @@ def sell_orders_outcome():
             #    copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
             
         except: 
-            lprint(['Trade history xls unavailable']) 
+            logger.lprint(['Trade history xls unavailable']) 
 
 ##################### Setting stop loss based on price data
 def stop_reconfigure(mode = None): 
@@ -855,9 +677,9 @@ def stop_reconfigure(mode = None):
             if bars_4h['move_extreme'].iloc[-1]  is not None: 
                 sl_extreme_upd = bars_4h['move_extreme'].iloc[-1] * (1 + var_contingency)     
         
-        lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
-        lprint([  "New extreme stop value:", sl_extreme_upd ])
-        lprint([  "Price flip analysis: {}, direction current: {}, direction previous: {}, short flag: {}".format(price_flip_upd, price_direction_move,
+        logger.lprint([  "New stop loss level based on the last candle: {}, setup direction: {}. Flip: {}".format(sl_target_upd, price_direction_move, price_flip_upd) ])
+        logger.lprint([  "New extreme stop value:", sl_extreme_upd ])
+        logger.lprint([  "Price flip analysis: {}, direction current: {}, direction previous: {}, short flag: {}".format(price_flip_upd, price_direction_move,
         price_direction_move_previous, short_flag) ])
         #print "> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
 
@@ -891,6 +713,7 @@ def to_the_moon(price_reached):
     global sl, sl_target, sl_p
     global short_flag, price_flip, sl_extreme
     global bars_4h, var_contingency
+    global exchange, exchange_abbr, market, logger
 
     sale_trigger = False # default
     
@@ -903,7 +726,7 @@ def to_the_moon(price_reached):
     else: 
         trailing_stop = price_max * post_sl_level            # to sell on new high * stop loss threshold   
     
-    lprint(["Mooning from:", price_max])   
+    logger.lprint(["Mooning from:", price_max])   
     rocket_flag = True
     
     # Running the loop 
@@ -921,9 +744,9 @@ def to_the_moon(price_reached):
             if price_flip_upd is not None: 
                 price_flip = price_flip_upd
             
-        price_last_moon = get_last_price(market)
+        price_last_moon = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
         increase_info = 100*float(price_last_moon - price_target)/float(price_target) 
-        lprint(["Price update:", price_last_moon, "in comparison with the original target:", round(increase_info, 2), "%"])
+        logger.lprint(["Price update:", price_last_moon, "in comparison with the original target:", round(increase_info, 2), "%"])
 
         # Updating the db 
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={}, mooning={} WHERE job_id={}".format(round(price_last_moon, 8), str(round(increase_info, 2)), 1, job_id)
@@ -935,7 +758,7 @@ def to_the_moon(price_reached):
             price_max = price_last_moon
             if not td_data_available: 
                 trailing_stop = price_max * post_sl_level        
-            lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
+            logger.lprint(["Last price:", price_max, "| trailing stop", trailing_stop, "| original take profit", price_cutoff])
 
         #  Checking if this is a time to sell now   
         #  starting only when trailing_stop_flag is active (should not be doing this for BTC runs) 
@@ -946,22 +769,22 @@ def to_the_moon(price_reached):
             # Depending on the long or short 
             if (((not short_flag) and price_flip and (price_last_moon <= min(price_cutoff, trailing_stop)) )  # if we are long and the price drops below original or trailing stop 
             or (short_flag and price_flip and (price_last_moon >= max(price_cutoff, trailing_stop))) ):  
-                lprint(["Run out of fuel @", price_last_moon])
+                logger.lprint(["Run out of fuel @", price_last_moon])
                 # Check if we need to sell. No need to do this if we have price action data (backtested for performance) 
                 if not td_data_available: 
                     sale_trigger = ensure_sale(price_last_moon)   
                 else: 
                     sale_trigger = True 
-                lprint(["Sale trigger (post-profit)", sale_trigger])
+                logger.lprint(["Sale trigger (post-profit)", sale_trigger])
             
             # Now checking sale trigger and selling if required         
             if sale_trigger == True:  
-                lprint(["Triggering trailing stop on", price_last])
-                send_notification('Sell: Post-TP', exchange + ' : ' + market + ': Triggering trailing stop on the level of ' + str(price_last))
+                logger.lprint(["Triggering trailing stop on", price_last])
+                aux_functions.send_notification(market, chat, 'Sell: Post-TP', exchange + ' : ' + market + ': Triggering trailing stop on the level of ' + str(price_last))
                 status = sell_now(price_last_moon)
                 # Update the status
                 rocket_flag, stat_msg = process_stat(status)
-                lprint([stat_msg])            
+                logger.lprint([stat_msg])            
                 # For buyback - using rebuy price
                 if short_flag:  
                     stopped_price = min(price_cutoff, trailing_stop)
@@ -971,14 +794,14 @@ def to_the_moon(price_reached):
         # Check if 'sell now' request has been initiated
         sell_init_flag = check_sell_flag()
         if sell_init_flag == True:       
-            lprint(["Sale initiated via Telegram @", price_last])
+            logger.lprint(["Sale initiated via Telegram @", price_last])
             status = sell_now(price_last_moon)
             sql_string = "UPDATE jobs SET selling = 0 WHERE job_id = {}".format(job_id)     # updating the DB 
             rows = query(sql_string)
             
             # Handling results
             rocket_flag, stat_msg = process_stat(status)
-            lprint([stat_msg])
+            logger.lprint([stat_msg])
             # For buyback - using rebuy price
             if short_flag:  
                 stopped_price = min(price_cutoff, trailing_stop)
@@ -989,7 +812,7 @@ def to_the_moon(price_reached):
         if rocket_flag:
             approved_flag = check_cancel_flag()
             if approved_flag == False: 
-                lprint(["Shutdown was requested via Telegram"])   
+                logger.lprint(["Shutdown was requested via Telegram"])   
                 sleep_timer = 0
             time.sleep(sleep_timer)
 
@@ -1003,18 +826,21 @@ def to_the_moon(price_reached):
 ##################### Anti-manipulation and anti-flash-crash filter for cases when we do not rely on price time analysis  
 def ensure_sale(check_price): 
     global short_flag
+    global exchange, exchange_abbr, market, logger, price_base
     
     proceed_sale = False           
     price_arr = np.zeros(3)          # 3 * N-min candlesticks  (see candle_extreme for N) 
-    lprint(["Running ensure_sale check"])
+    logger.lprint(["Running ensure_sale check"])
     
     ## Filling the prices array - will be checking for lower highs 
     while (0 in price_arr):  
-        approved_flag = check_cancel_flag() # checking Telegram requests and answering 
+        approved_flag = check_cancel_flag()  # checking Telegram requests and answering 
         if approved_flag == False: 
             break
     
-        price_lowest, price_highest, crossed_flag_info = candle_analysis(check_price)           #candle_extreme('H')  
+        price_lowest, price_highest, crossed_flag_info = coinigy.candle_analysis(exchange, exchange_abbr, market, logger, check_price) 
+        #candle_extreme('H')  
+        
         if short_flag != True: # LONGS  
             price_arr = np.append(price_arr, price_highest)
         else:  # SHORTS   
@@ -1024,31 +850,31 @@ def ensure_sale(check_price):
         # Selling on the series of lower or same highs of 3 x N-min candlesticks when the price array is filled for longs: 
         if short_flag != True: # LONGS  
             if (0 not in price_arr): 
-                lprint(["High in the candle:", price_highest, "| lower or same highs:", equal_or_decreasing(price_arr)])  #lprint([price_arr]) # DEBUG
-                if equal_or_decreasing(price_arr): 
+                logger.lprint(["High in the candle:", price_highest, "| lower or same highs:", aux_functions.equal_or_decreasing(price_arr)])  #logger.lprint([price_arr]) # DEBUG
+                if aux_functions.equal_or_decreasing(price_arr): 
                     proceed_sale = True
                     break
             else: 
-                lprint(["High in the candle:", price_highest])  #lprint([price_arr]) # DEBUG
+                logger.lprint(["High in the candle:", price_highest])  #logger.lprint([price_arr]) # DEBUG
                 
             # If we are back above the check_price value - exit the cycle and return false 
             if price_highest > check_price: 
-                lprint(["Cancelling ensure_sale since the price is back to normal"])  
+                logger.lprint(["Cancelling ensure_sale since the price is back to normal"])  
                 proceed_sale = False
                 break
                 
         else: # SHORTS      
             if (0 not in price_arr): 
-                lprint(["Low in the candle:", price_lowest, "| higher or same lows:", equal_or_increasing(price_arr)])  #lprint([price_arr]) # DEBUG
-                if equal_or_increasing(price_arr): 
+                logger.lprint(["Low in the candle:", price_lowest, "| higher or same lows:", aux_functions.equal_or_increasing(price_arr)])  #logger.lprint([price_arr]) # DEBUG
+                if aux_functions.equal_or_increasing(price_arr): 
                     proceed_sale = True
                     break
             else: 
-                lprint(["Low in the candle:", price_lowest])  #lprint([price_arr]) # DEBUG
+                logger.lprint(["Low in the candle:", price_lowest])  #logger.lprint([price_arr]) # DEBUG
                 
             # If we are back above the check_price value - exit the cycle and return false 
             if price_lowest < check_price: 
-                lprint(["Cancelling ensure_sale since the price is back to normal"])  
+                logger.lprint(["Cancelling ensure_sale since the price is back to normal"])  
                 proceed_sale = False
                 break
 
@@ -1073,9 +899,10 @@ def sell_now(at_price):
     global sleep_sale, steps_ticker, sleep_ticker, balance_start, contracts_start, short_flag
     global db, cur, job_id
     global chat
+    global exchange, exchange_abbr, logger
     
     # Starting balance for further use. Should be done with all orders cancelled
-    cancel_orders(market)
+    cancel_orders(exchange, market)
     
     # Get balance
     if simulation != True: 
@@ -1083,7 +910,7 @@ def sell_now(at_price):
         balance_start  = Decimal('{0:.8f}'.format(balance['Available']))   # to correctly work with decimal numbers; not needed for bitmex 
 
         if exchange != 'bitmex':         
-            lprint(["Balance available to sell", balance_start])    
+            logger.lprint(["Balance available to sell", balance_start])    
     
     if limit_sell_amount is not None: 
         limit_sell_amount = Decimal(str(limit_sell_amount))     # using str, we will not have more decimal numbers than needed
@@ -1100,7 +927,7 @@ def sell_now(at_price):
         balance_adjust = Decimal(str(balance_start)) - Decimal(str(limit_sell_amount))
         balance_start = Decimal(str(limit_sell_amount))
         #print ">> Adjust", balance_adjust, "Bal_start", balance_start, "Limit sell am", limit_sell_amount      #DEBUG 
-        lprint(["Limiting total amount to be sold. Total:", limit_sell_amount, "Adjustment:", balance_adjust])
+        logger.lprint(["Limiting total amount to be sold. Total:", limit_sell_amount, "Adjustment:", balance_adjust])
     else:
         balance_adjust = 0
 
@@ -1139,7 +966,7 @@ def sell_now(at_price):
     else: # for other exchanges     
         value_original = Decimal(str(price_entry)) * balance_start    
  
-    lprint(["Original value:", value_original])
+    logger.lprint(["Original value:", value_original])
     
     # Main sell loop
     sell_run_flag = True
@@ -1163,7 +990,7 @@ def sell_now(at_price):
                 else:
                     unfilled_prop = Decimal(str(val['QuantityRemaining']))/Decimal(str(val['Quantity']))
                 if unfilled_prop >= 0.05:  # if more than 5% still left in the order
-                    lprint(["Cancelling unfilled order:", val['OrderUuid'], "quantity", val['Quantity'], 
+                    logger.lprint(["Cancelling unfilled order:", val['OrderUuid'], "quantity", val['Quantity'], 
                            "quantity remaining", val['QuantityRemaining'], "limit", val['Limit'], "price", val['Price']
                            ]) 
                     cancel_stat = cancel(exchange, market, val['OrderUuid'])
@@ -1177,15 +1004,15 @@ def sell_now(at_price):
         if (decrease_price_step < 0.0255) and decrease_price_flag:     
             if short_flag != True: #LONG
                 decrease_price_step += 0.001
-                lprint(["Sell price will be decreased on", decrease_price_step*100, "%"]) 
+                logger.lprint(["Sell price will be decreased on", decrease_price_step*100, "%"]) 
             else: #SHORT 
                 decrease_price_step -= 0.001
-                lprint(["Sell price will be increased on", decrease_price_step*100, "%"]) 
+                logger.lprint(["Sell price will be increased on", decrease_price_step*100, "%"]) 
             
         # Notify if a position cannot be sold for a long time 
         if decrease_attempts_total >= 30: 
             time_passed = int(decrease_attempts_total*(sleep_sale + steps_ticker*sleep_ticker)/60)
-            lprint(["Unable to sell the position for more than", time_passed, "minutes"]) 
+            logger.lprint(["Unable to sell the position for more than", time_passed, "minutes"]) 
             chat.send(market +": unable to sell the position for more than " + time_passed + " minutes")
                         
         # 1. Get the available balance and proceed with selling       
@@ -1236,7 +1063,7 @@ def sell_now(at_price):
         
         # 2. If something is still required to be sold
         if sell_run_flag: 
-            lprint(["Order amount", balance_available, "at price threshold", at_price, "split on", sell_portion])
+            logger.lprint(["Order amount", balance_available, "at price threshold", at_price, "split on", sell_portion])
             remaining_sell_balance = balance_available   
             if exchange == 'bitmex': 
                 sale_steps_no = 1       # for the whole position (at least for now) 
@@ -1254,7 +1081,7 @@ def sell_now(at_price):
                 
                 # Price update
                 if exchange != 'bitmex': 
-                    price_last_sell = get_last_price(market)
+                    price_last_sell = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
                 else: 
                     # When we are long, on the exit we sell -> get the price from bids (the highest which is the first in the array)
                     # When we are short, on the exit we buy -> get the price from asks (the lowest, which is the first in the array)
@@ -1265,7 +1092,7 @@ def sell_now(at_price):
                 
                 # Decreasing the price if necessary
                 price_to_sell = price_last_sell*(1 - decrease_price_step)
-                lprint(["Placing SELL order: Q:", sell_q_step, "@", price_to_sell, "Last market price:", price_last_sell, 
+                logger.lprint(["Placing SELL order: Q:", sell_q_step, "@", price_to_sell, "Last market price:", price_last_sell, 
                        "Remaining balance after sale:", round(remaining_sell_balance - sell_q_step, 6)])
                 
                 # Actually place sell orders if we are not in the simulation mode - re-check
@@ -1287,7 +1114,7 @@ def sell_now(at_price):
                     else: 
                         sell_result = selllimit(exchange, market, sell_q_step, price_to_sell) 
                     
-                    lprint(["-------------------------------------------------------------------- \n>> Sell result:", sell_result, "\n--------------------------------------------------------------------"])   
+                    logger.lprint(["-------------------------------------------------------------------- \n>> Sell result:", sell_result, "\n--------------------------------------------------------------------"])   
                     
                     if (sell_result == err_1) or (sell_result == err_2):
                         sell_run_flag = False
@@ -1341,21 +1168,11 @@ def sell_now(at_price):
     return stopmessage
 
 ################################ Functions - system ############################################
-def terminate_w_message(short_text, errtext):
-    global logger, handler    
-    lprint([short_text])
-    send_notification(short_text, errtext)
-    logger.close_and_exit()
-
-# Checking if we need to terminate
 def check_cancel_flag():
-    global market 
     global db, cur, job_id
-    
     keep_running = True 
-    sql_string = "SELECT abort_flag FROM jobs WHERE job_id = '{}'".format(job_id)
+    sql_string = "SELECT abort_flag FROM buys WHERE job_id = '{}'".format(job_id)
     rows = query(sql_string)
-
     try: 
         flag_terminate = rows[0][0] # first result 
     except: 
@@ -1363,7 +1180,7 @@ def check_cancel_flag():
     if (flag_terminate == 1): 
         keep_running = False
     return keep_running
- 
+
 # Checking if we need to initiate selling from the main or from the mooning cycle 
 def check_sell_flag():
     global market 
@@ -1380,27 +1197,7 @@ def check_sell_flag():
     if (sell_flag == 1): 
         sell_initiate = True
     return sell_initiate
- 
-def send_notification(subj, text):
-    global send_messages, trade_id, comm_method, market
-    
-    if send_messages:
-        if comm_method == 'mail':
-            msg = MIMEMultipart()
-            msg['From'] = fromaddr
-            msg['To'] = toaddr
-            msg['Subject'] = trade_id + ': ' + subj
-            body = text
-            msg.attach(MIMEText(body, 'plain'))
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(fromaddr, email_passw)
-            text = msg.as_string()
-            server.sendmail(fromaddr, toaddr, text)
-            server.quit()  
-        else: 
-            chat.send(text)
-            
+       
 def timenow():
     return strftime("%Y-%m-%d %H:%M:%S", localtime())
 
@@ -1409,22 +1206,22 @@ def timenow():
 ###################################################################################
 
 ### Greetings (for logs readability) 
-lprint(["###################### ROBOT ###########################"])
+logger.lprint(["###################### ROBOT ###########################"])
 
 if stop_loss: 
-    lprint([market, "| Take profit target:", price_target, "| Stop loss:", sl_target, "| Simulation mode:", simulation])
+    logger.lprint([market, "| Take profit target:", price_target, "| Stop loss:", sl_target, "| Simulation mode:", simulation])
 else: 
-    lprint([market, "| Take profit target:", price_target, "| Stop loss: disabled (post-profit only) | Simulation mode:", simulation])
+    logger.lprint([market, "| Take profit target:", price_target, "| Stop loss: disabled (post-profit only) | Simulation mode:", simulation])
 
 if limit_sell_amount > 0: 
-    lprint(["Maximum quantity to sell", limit_sell_amount])
+    logger.lprint(["Maximum quantity to sell", limit_sell_amount])
 
 ### Set up the margin on bitmex 
 if exchange == 'bitmex': 
     try: # can give an error  
         set_margin = bitmex_leverage(market, bitmex_margin)
     except: 
-        lprint(["Cannot set the margin, check manually"])
+        logger.lprint(["Cannot set the margin, check manually"])
         chat.send("Cannot set the margin on bitmex, check manually")
 
 '''
@@ -1432,7 +1229,7 @@ if exchange == 'bitmex':
 # Check if TP is set higher than SL 
 if tp < sl: 
     # print "TP {}, SL {}".format(tp, sl) # DEBUG #
-    lprint(["Take profit lower than stop loss, r u ok?"])
+    logger.lprint(["Take profit lower than stop loss, r u ok?"])
     exit(0)
 ''' 
  
@@ -1443,14 +1240,14 @@ try:
     ticker_upd = coinigy.price(exchange_abbr, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
-        send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+        aux_functions.send_notification(market, chat, 'Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         while ticker_upd is None: 
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
+            logger.lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
             time.sleep(300) # sleeping for 5 minutes and checking again
             ticker_upd = coinigy.price(exchange_abbr, market)
         
     if ticker_upd == 'INVALID_MARKET': 
-        lprint(['Error: Invalid market'])
+        logger.lprint(['Error: Invalid market'])
         logger.close_and_exit()
 
     else:
@@ -1458,11 +1255,11 @@ try:
         price_check = ticker_upd
         ratio = float(price_target)/float(price_check)
         if (ratio >= 8) or (ratio <= 0.15): 
-            lprint(['Error: Double-check prices, are you missing a zero or adding an extra one? The current price is', price_check])
+            logger.lprint(['Error: Double-check prices, are you missing a zero or adding an extra one? The current price is', price_check])
             logger.close_and_exit()
 
 except urllib2.URLError:
-    terminate_w_message('Exchange url unavailable')
+    aux_functions.terminate_w_message(logger, 'Exchange unavailable', 'Exchange url unavailable')
     logger.close_and_exit()
 
 
@@ -1470,7 +1267,7 @@ except urllib2.URLError:
 if simulation != True: 
     balance = getbalance(exchange, currency)
     if balance['Available'] == 0: 
-        terminate_w_message('Error: Zero balance', currency + ': zero balance')
+        aux_functions.terminate_w_message(logger, 'Error: Zero balance', currency + ': zero balance')
         logger.close_and_exit()
     if exchange == 'bitmex': 
         bitmex_no_positions = True 
@@ -1480,10 +1277,10 @@ if simulation != True:
                 bitmex_no_positions = False 
                 if position['type'] == 'short':     # enabling short flag if the positions are in short 
                     short_flag = True 
-                    lprint(['Enabling short_flag'])
+                    logger.lprint(['Enabling short_flag'])
                 break # exit the for loop 
         if bitmex_no_positions: 
-            terminate_w_message('Error: Zero positions on bitmex', 'Error: Zero positions on bitmex')
+            aux_functions.terminate_w_message(logger, 'Error: Zero positions on bitmex', 'Error: Zero positions on bitmex')
             logger.close_and_exit()
 else: # if simulation 
     if price_target < sl_target: 
@@ -1528,7 +1325,7 @@ if not td_data_available:
     
 ### 7. 4H-based stop loss update    
 if td_data_available: 
-    lprint(["Reconfiguring stop loss level based on TD candles"])
+    logger.lprint(["Reconfiguring stop loss level based on TD candles"])
     price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd = stop_reconfigure('now')
     
     #print ">>> Returned price_flip {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
@@ -1552,18 +1349,18 @@ while orders_opening is None:
     except:
          time.sleep(1) 
  
-lprint(["Last orders when starting the script"])
+logger.lprint(["Last orders when starting the script"])
 if len(orders_opening) < 5: 
     count_max = len(orders_opening)
 else: 
     count_max = 5 
 
 for i in range (0, count_max): 
-    lprint(['>', orders_opening[i]['OrderUuid']])  
+    logger.lprint(['>', orders_opening[i]['OrderUuid']])  
  
 for elem in orders_opening: 
     orders_start.add(elem['OrderUuid'])
-    #lprint(['>', elem['OrderUuid']]) #DEBUG
+    #logger.lprint(['>', elem['OrderUuid']]) #DEBUG
 
 # Flags to notify if the prices dropped 
 flag_notify_m = True
@@ -1588,9 +1385,10 @@ while run_flag and approved_flag:
                 price_flip = price_flip_upd
         
         # Get the last price
-        price_last = get_last_price(market)
+        price_last = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
+        
         price_compared = round((float(price_last)/float(price_curr))*100, 2)
-        lprint([exchange, market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target, "sl_extreme", sl_extreme, "| price flip:", price_flip])
+        logger.lprint([exchange, market, ": updating price information:", price_last, "|", price_compared, "% of entry price | sl:", sl_target, "sl_extreme", sl_extreme, "| price flip:", price_flip])
         sql_string = "UPDATE jobs SET price_curr={}, percent_of={} WHERE job_id={}".format(round(price_last, 8), price_compared, job_id)
         rows = query(sql_string)
         
@@ -1600,16 +1398,16 @@ while run_flag and approved_flag:
         ### Running the main conditions check to trigger take profit / stop loss 
         ## Checking TP reached - for longs / shorts 
         if (short_flag and (price_last < price_target)) or ((not short_flag) and (price_last > price_target)):      
-            lprint(["Take-profit price reached"])
-            send_notification("Mooning", market + ": Reached the initial TP target and mooning now: " + str(price_last))
+            logger.lprint(["Take-profit price reached"])
+            #send_notification("Mooning", market + ": Reached the initial TP target and mooning now: " + str(price_last))
             status = to_the_moon(price_last)    # mooning for as long as possible 
             if status == 'stop':
-                lprint(["Stopped monitoring and finished trades (post-profit)"])
+                logger.lprint(["Stopped monitoring and finished trades (post-profit)"])
                 sleep_timer = 0
                 run_flag = False 
                 stopped_mode = 'post-profit'    # used in buyback
             elif status == 'abort_telegram': 
-                lprint(["Stopped monitoring and finished trades (as requested)"])
+                logger.lprint(["Stopped monitoring and finished trades (as requested)"])
                 sleep_timer = 0
                 run_flag = False 
                 stopped_mode = 'telegram' 
@@ -1620,13 +1418,13 @@ while run_flag and approved_flag:
             # Checking for sequential candle-based signals 
             if (short_flag and price_flip and (price_last >= sl_target)) or ((not short_flag) and price_flip and (price_last <= sl_target)):      
                 dropped_flag = True     # changing the flag 
-                lprint(["Hitting pre-moon stop loss threshold:", sl_target])
+                logger.lprint(["Hitting pre-moon stop loss threshold:", sl_target])
                 # Check if we need to sell 
                 if not td_data_available: 
                     sale_trigger = ensure_sale(sl_target)   
                 else: 
                     sale_trigger = True                
-                lprint(["Sale (stop) trigger (pre-moon):", sale_trigger])
+                logger.lprint(["Sale (stop) trigger (pre-moon):", sale_trigger])
                 chat.send(market +": exiting based on the time candles (shorter period)")
                  
             # Checking for extreme moves 
@@ -1637,10 +1435,10 @@ while run_flag and approved_flag:
                         sale_trigger = ensure_sale(price_last)   
                     else: 
                         sale_trigger = True             
-                    lprint(["Sale trigger", sale_trigger])
+                    logger.lprint(["Sale trigger", sale_trigger])
                     comm_string = "{}: exiting based on the breach of extreme {}. Current price {}".format(market, sl_extreme, price_last)
                     chat.send(comm_string)
-                    lprint([comm_string])
+                    logger.lprint([comm_string])
         
             # Checking for nines and breaches of nines
             # Approach A: if [-2] (before last) is nine and the price goes beyond the extreme of nine + (or -) contingency
@@ -1659,7 +1457,7 @@ while run_flag and approved_flag:
                             sale_trigger = True      
                 if sale_trigger: 
                     comm_string = "{}: exiting based on 9-1 rule. Current price {}".format(market, price_last)
-                    lprint([ comm_string ])
+                    logger.lprint([ comm_string ])
                     chat.send(comm_string)
             '''     
             # Approach B 
@@ -1667,7 +1465,7 @@ while run_flag and approved_flag:
                 if bars_4h['td_setup'].iloc[-2] == '9': 
                     sale_trigger = True    
                     comm_string = "{}: exiting after 9 (taking profit for re-evaluation further). Current price {}".format(market, price_last)
-                    lprint([ comm_string ])
+                    logger.lprint([ comm_string ])
                     chat.send(comm_string)
             
             # Checking for RSI conditions 
@@ -1682,28 +1480,28 @@ while run_flag and approved_flag:
                     sale_trigger = True             
                     comm_string = "{}: taking profit based on extreme RSI value".format(market)
                     chat.send(comm_string)
-                    lprint([comm_string])
+                    logger.lprint([comm_string])
             
             ### Stop loss triggered 
             if sale_trigger == True:       
                 # Stop-loss triggered
-                lprint(["Triggering pre-profit stop loss on", price_last])
-                send_notification('Sell: SL', exchange + ' : ' + market + ': Triggering stop loss at the level of ' + str(price_last))
+                logger.lprint(["Triggering pre-profit stop loss on", price_last])
+                aux_functions.send_notification(market, chat, 'Sell: SL', exchange + ' : ' + market + ': Triggering stop loss at the level of ' + str(price_last))
                 status = sell_now(price_last)
                 # Handling results
                 run_flag, stat_msg = process_stat(status)
-                lprint([stat_msg])
+                logger.lprint([stat_msg])
                 stopped_mode = 'pre-profit'     # used in buyback
                 stopped_price = sl_target          
            
         # Check if selling now request has been initiated
         sell_init_flag = check_sell_flag()
         if sell_init_flag and approved_flag and run_flag:       
-            lprint(["Sale initiated via Telegram @", price_last])
+            logger.lprint(["Sale initiated via Telegram @", price_last])
             status = sell_now(price_last)
             # Handling results
             run_flag, stat_msg = process_stat(status)
-            lprint([stat_msg])
+            logger.lprint([stat_msg])
             stopped_price = price_last  # used in buyback
             stopped_mode = 'telegram' 
         
@@ -1711,19 +1509,19 @@ while run_flag and approved_flag:
         if run_flag and approved_flag:
             approved_flag = check_cancel_flag()
             if approved_flag == False: 
-                lprint(["Shutdown was requested via Telegram"])   
+                logger.lprint(["Shutdown was requested via Telegram"])   
                 stopped_mode = 'telegram' 
                 sleep_timer = 0
             time.sleep(sleep_timer)
             
     except KeyboardInterrupt:
-        lprint(["Shutdown was initiated manually, canceling orders and terminating now"])   
+        logger.lprint(["Shutdown was initiated manually, canceling orders and terminating now"])   
         sql_string = "DELETE FROM jobs WHERE job_id = {}".format(job_id)    # deleting the task from the db 
         rows = query(sql_string)
 
         # Cancelling orders if not in the simulation mode
         if simulation != True:
-            cancel_orders(market)
+            cancel_orders(exchange, market)
             time.sleep(10) # wait for cancellations to be processed
             # Information on orders performed if not in a simulation mode
             sell_orders_info()
@@ -1760,9 +1558,9 @@ if (stopped_mode == 'pre-profit') and (cancel_buyback == False):
     else: 
         bb_price = price_exit * 1.0025 # SHORTS  
     if td_data_available:  
-        lprint(["Buyback will be based on TD candles"])
+        logger.lprint(["Buyback will be based on TD candles"])
     else: 
-        lprint(["Setting buyback price as actual sell +/- 0.25%. Price_exit:", price_exit, "bb_price", bb_price])
+        logger.lprint(["Setting buyback price as actual sell +/- 0.25%. Price_exit:", price_exit, "bb_price", bb_price])
     
     '''
     # Uncomment if you would like to restrict buybacks, code should also be revised from long / short perspective 
@@ -1792,9 +1590,9 @@ elif stopped_mode == 'post-profit':
             bb_price = price_exit  * 0.99
      
     if td_data_available:  
-        lprint(["Buyback will be based on TD candles"])
+        logger.lprint(["Buyback will be based on TD candles"])
     else: 
-        lprint(["Setting buyback price as actual +/- 1%. Stopped_price:", stopped_price, "bb_price", bb_price])
+        logger.lprint(["Setting buyback price as actual +/- 1%. Stopped_price:", stopped_price, "bb_price", bb_price])
     ''' 
     # Uncomment if you would like to restrict buybacks 
     # If it was a loser - delete the info in DB and continue with BBack 
@@ -1804,7 +1602,7 @@ elif stopped_mode == 'post-profit':
     ''' 
 else: 
     # If just called for stop from Telegram 
-    lprint(["Sold through telegram"])   
+    logger.lprint(["Sold through telegram"])   
     if price_exit is None: 
         bb_price = price_last
     else: 
@@ -1815,7 +1613,7 @@ try:
 
     # Starting buyback except for the cases when the task was aborted through telegram 
     if stopped_mode != 'telegram':      
-        lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
+        logger.lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
         
         if exchange == 'bitmex': 
             buy_trade_price = (main_curr_from_sell)/bitmex_margin
@@ -1831,7 +1629,7 @@ try:
         
         # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
         if bb_flag: 
-            send_notification('Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
+            aux_functions.send_notification(market, chat, 'Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
             
             # Launching workflow to buy and resume the task with same parameters
             # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
@@ -1882,7 +1680,7 @@ try:
         
         # If a buyback cancellation was requested 
         else: 
-            send_notification('Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
+            aux_functions.send_notification(market, chat, 'Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
             # Delete buyback from the DB 
             sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
             rows = query(sql_string)

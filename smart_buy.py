@@ -22,9 +22,6 @@ from sys import exit, argv
 from time import localtime, strftime
 import subprocess   
 import math
-import smtplib
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
 import urllib2
 import decimal
 from decimal import Decimal
@@ -45,6 +42,8 @@ from telegramlib import telegram                              # my lib to work w
 from sqltools import query_lastrow_id, query           # proper requests to sqlite db
 from loglib import logfile # logging
 import platformlib as platform                                    # detecting the OS and assigning proper folders 
+import aux_functions               # various auxiliary functions   
+aux_functions = aux_functions.aux_functions()
 
 # Universal functions for all exchanges 
 from exchange_func import (getticker, 
@@ -106,8 +105,6 @@ sleep_ticker = int(sleep_ticker/speedrun)
 candle_steps = int(candle_steps/speedrun)
 
 ### Comms 
-send_messages = True 
-comm_method = config.comm_method 
 chat = telegram()
 
 ### Default flag for shorting. The bot can be used to short on bitmex, not only go long 
@@ -128,51 +125,6 @@ btc_market_reference = config.btc_market_reference
 market_ref = None  
 exchange_abbr_ref = None 
 
-
-################################ Functions - part I ############################################
-
-##################### Price comparison 
-def strictly_increasing(L):
-    return all(x<y for x, y in zip(L, L[1:]))
-
-def strictly_decreasing(L):
-    return all(x>y for x, y in zip(L, L[1:]))
-   
-def terminate_w_message(short_text, errtext):
-    global logger, handler    
-    lprint([short_text])
-    send_notification(short_text, errtext)
-    logger.close_and_exit()
-
-def send_notification(subj, text):
-    global send_messages, comm_method, market, chat
-    
-    if send_messages:
-        if comm_method == 'mail':
-            msg = MIMEMultipart()
-            msg['From'] = fromaddr
-            msg['To'] = toaddr
-            msg['Subject'] = trade_id + ': ' + subj
-            body = text
-            msg.attach(MIMEText(body, 'plain'))
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(fromaddr, email_passw)
-            text = msg.as_string()
-            server.sendmail(fromaddr, toaddr, text)
-            server.quit()  
-        else: 
-            chat.send(text)
-
-##################### Log and print function 
-def lprint(arr):
-    msg = ' '.join(map(lambda x: ''+ str(x), arr))
-    try: 
-        logger.write(msg)
-        print msg
-    except: 
-        print 'Failed to print output due to the IO error'
-            
 ################################ Config - part II ############################################
 
 ### Input parameters 
@@ -181,14 +133,14 @@ try:
     mode = argv[1].lower()
     if mode not in ['reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s', 'fullta', 'fullta-s']: 
         print "Incorrect mode specified (should be reg, 'reg', 'brk', 'now', 'reg-s', 'brk-s', '4h', '4h-s', 'fullta', 'fullta-s')\n\n"
-        send_notification('Incorrect mode', 'Incorrect mode specified')
+        aux_functions.send_notification(market, chat, 'Incorrect mode', 'Incorrect mode specified')
         exit(0)
         
     # Exchange 
     exchange_abbr = argv[2].lower()
     if exchange_abbr not in ['btrx', 'bina', 'bmex']: 
         print 'Incorrect exchange specified (should be btrx, bina, or bitmex)\n\n'
-        send_notification('Incorrect exchange', 'Incorrect exchange specified')
+        aux_functions.send_notification(market, chat, 'Incorrect exchange', 'Incorrect exchange specified')
         exit(0)
         
     if exchange_abbr == 'btrx': 
@@ -213,7 +165,7 @@ try:
     if exchange == 'bitmex' and trade != 'USD' and currency == 'BTC': 
         market = trade
     
-    # New logger
+    # New logger   
     logger = logfile(market, 'buy')    
 
     # Getting for the whole if there is no input 
@@ -230,7 +182,7 @@ try:
     except: 
         balance = getbalance(exchange, trade)
         source_position = float(balance['Available'])
-        lprint(["Buying for the whole balance of", source_position])
+        logger.lprint(["Buying for the whole balance of", source_position])
     
     # Also change to properly reflect the margin    
     if exchange == 'bitmex': 
@@ -252,7 +204,7 @@ try:
 
     # Shorts are only supported for bitmex 
     if exchange != 'bitmex' and short_flag: 
-        lprint(["Shorts are not supported on the exchange", exchange])
+        logger.lprint(["Shorts are not supported on the exchange", exchange])
     
     ### Handle the reference to a different set of prices (from finex) in the case of usd-btc and bitmex 
     if market == 'USD-BTC' and exchange == 'bitmex' and btc_market_reference:        # put in the config 
@@ -262,7 +214,7 @@ try:
 
     
     ### Greetings (for logs readability) 
-    lprint(["###################### SMART_BUY ###########################"])
+    logger.lprint(["###################### SMART_BUY ###########################"])
         
     
 except:
@@ -317,7 +269,6 @@ except:
     td_data_extended_available = False 
  
 print "TD data availability:", td_data_available, "| extended ", td_data_extended_available
-
 del elem         # delete unused var from memory 
 
 ### Check if this is a part of workflow (meaning that a job should be then launched)   
@@ -327,14 +278,14 @@ rows = query(sql_string)
 try: 
     wf_id = rows[0][0]   # first result if existing 
     wf_run_mode = rows[0][1] 
-    lprint(["Workflow:", wf_id, wf_run_mode])
+    logger.lprint(["Workflow:", wf_id, wf_run_mode])
 except:
-    lprint(["Not a part of workflow"])
+    logger.lprint(["Not a part of workflow"])
     wf_id = None
     wf_run_mode = None
 
 ################################ Functions - part II ############################################
-##################### Check if cancellation was requested through Telegram 
+##################### Check if cancellation was requested through Telegram \
 def check_cancel_flag():
     global db, cur, job_id
     keep_running = True 
@@ -348,108 +299,17 @@ def check_cancel_flag():
         keep_running = False
     return keep_running
 
-##################### Getting several last prices in short intervals instead of just one 
-def get_last_price(market): 
-    ticker_upd = {}
-    price_upd = 0
-    failed_attempts = 0
-    for i in range(1, steps_ticker + 1):
-        try:
-            #ticker_upd = getticker(exchange, market) 
-            ticker_upd = coinigy.price(exchange_abbr, market)
-            price_upd += ticker_upd
-        except:
-            #print "Issues with URL (!) for market", market
-            failed_attempts += 1
-        time.sleep(sleep_ticker)
-        
-    # Logging failed attempts number
-    if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])   
-        
-    # If retreiving prices fails completely
-    if failed_attempts == steps_ticker:     
-        ticker_upd = None # Change
-        # Could be related to maintenance
-        try:
-            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
-        except: 
-            lprint(["Failed to send notification"])    
-        while ticker_upd is None: 
-            time.sleep(300) # sleeping for 5 minutes and checking again
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
-            try:
-                #ticker_upd = getticker(exchange, market)  
-                ticker_upd = coinigy.price(exchange_abbr, market)
-            except: 
-                ticker_upd = None
-            price_upd = ticker_upd
-    else: 
-        # Get the average price 
-        price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
-        
-    return price_upd
-
-##################### Extreme in time series 
-# Returns value with the lowest or the highest ticker price among 5-min intervals (candles) 
-# type should be 'H' or 'L' (highest ore lowest in the series) 
-def candle_extreme(type): 
-    global market, candle_steps, candle_sleep
-    ticker_upd = {}
-    price_upd = 0
-    price_extreme = 0
-    failed_attempts = 0
-    
-    for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
-        try:
-            #ticker_upd = getticker(exchange, market)
-            ticker_upd = coinigy.price(exchange_abbr, market)
-            price_upd = ticker_upd
-            if type == 'L': 
-                if (price_extreme == 0) or (price_upd < price_extreme): 
-                    price_extreme = price_upd
-            if type == 'H': 
-                if (price_extreme == 0) or (price_upd > price_extreme): 
-                    price_extreme = price_upd
-        except:
-            #print "Issues with URL (!) for market", market
-            failed_attempts += 1
-        time.sleep(candle_sleep) 
-        
-    # Logging failed attempts number
-    if failed_attempts > 0: 
-        lprint(["Failed attempts to receive price:", failed_attempts])    
-    # If retreiving prices fails completely
-    if failed_attempts == steps_ticker:     
-        ticker_upd = None # Change
-        # Could be related to maintenance
-        try:
-            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
-        except: 
-            lprint(["Failed to send notification"])    
-        while ticker_upd is None: 
-            time.sleep(300)  
-            lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
-            try:
-                #ticker_upd = getticker(exchange, market)  
-                ticker_upd = coinigy.price(exchange_abbr, market)
-            except: 
-                ticker_upd = None
-            price_upd = ticker_upd
-            price_extreme = price_upd
-    return price_extreme
-
-##################### Ensuring buy  
+##################### Ensuring buy, only on the long side 
 def ensure_buy(): 
     global mode 
 
     if mode == 'now':
         proceed_buy = True  
-        lprint(["Proceeding with immediate buy as requested"])
+        logger.lprint(["Proceeding with immediate buy as requested"])
     else: 
         proceed_buy = False  
         price_arr = np.zeros(3)     #3*N-min candlesticks
-        lprint(["Running ensure_buy check"])
+        logger.lprint(["Running ensure_buy check"])
         
         # Filling the prices array - will be checking for strictly higher lows 
         # this while actually solves the issue of unavailability too
@@ -459,17 +319,17 @@ def ensure_buy():
             if approved_flag == False: 
                 return 
         
-            price_lowest = candle_extreme('L')  
+            price_lowest = coinigy.candle_extreme(exchange, exchange_abbr, market, logger, 'L')
             price_arr = np.append(price_arr, price_lowest)
             price_arr = np.delete(price_arr, [0])
 
             # Selling on the series of strictly higher lows
             if (0 not in price_arr): 
-                lprint(["Low in the candle:", price_lowest, "| higher lows:", strictly_increasing(price_arr)])   
-                if strictly_increasing(price_arr): 
+                logger.lprint(["Low in the candle:", price_lowest, "| higher lows:", aux_functions.strictly_increasing(price_arr)])   
+                if aux_functions.strictly_increasing(price_arr): 
                     proceed_buy = True
             else: 
-                lprint(["Low in the candle:", price_lowest])   
+                logger.lprint(["Low in the candle:", price_lowest])   
 
     return proceed_buy     
 
@@ -495,14 +355,14 @@ def ensure_balance():
             balance_avail = Decimal(balance_avail).quantize(Decimal('.0001'), rounding='ROUND_DOWN')
             if balance_avail * Decimal(0.99) * bitmex_margin < source_position:         # 0.01 is a commission I reckon 
                 source_position = balance_avail * bitmex_margin * Decimal(0.99) 
-                lprint(['Corrected the position in ensure balance:', balance_avail ])     
+                logger.lprint(['Corrected the position in ensure balance:', balance_avail ])     
                 return True
             else: 
                 return True 
         else: 
             if Decimal(str(balance_avail)) < Decimal(str(source_position)): 
                 source_position = Decimal(str(balance_avail))  
-                lprint(['Corrected the position in ensure balance:', source_position ])       
+                logger.lprint(['Corrected the position in ensure balance:', source_position ])       
                 return True 
             else: 
                 return True 
@@ -517,15 +377,14 @@ try:
     ticker_upd = coinigy.price(exchange_abbr, market)
     # Ticker could be failing if there is automatic maintenance - then sleep for a while
     if ticker_upd is None: 
-        send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+        aux_functions.send_notification(market, chat, 'Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
         while ticker_upd is None: 
             time.sleep(300) # sleeping for 5 minutes and checking again
-            #ticker_upd = getticker(exchange, market)  
             ticker_upd = coinigy.price(exchange_abbr, market)
     
     if ticker_upd == 'INVALID_MARKET': 
-        lprint(['Error: Invalid market'])    
-        send_notification('Error', 'Error: Invalid market to buy')
+        logger.lprint(['Error: Invalid market'])    
+        aux_functions.send_notification(market, chat, 'Error', 'Error: Invalid market to buy')
         logger.close_and_exit()
         
     elif fixed_price != None: 
@@ -534,13 +393,13 @@ try:
         ratio = float(fixed_price)/float(price_check)
         if (ratio >= 1) and (mode == 'reg'): 
             err_msg = 'Error: the requested price is higher than the current. The current price is ' + str(price_check)
-            send_notification('Error', err_msg)
-            lprint([err_msg])
+            aux_functions.send_notification(market, chat, 'Error', err_msg)
+            logger.lprint([err_msg])
             logger.close_and_exit()
 
 except urllib2.URLError:
-    lprint(['Exchange url unavailable to buy'])    
-    send_notification('Error', 'Exchange url unavailable to buy')
+    logger.lprint(['Exchange url unavailable to buy'])    
+    aux_functions.send_notification(market, chat, 'Error', 'Exchange url unavailable to buy')
     logger.close_and_exit()
 
 
@@ -604,14 +463,14 @@ if (exchange == 'bitmex') and (wf_run_mode != 's') and (wf_run_mode != 'sns') an
         try: 
             contracts_check =  positions[0]['contracts']
             if positions_first_checked: 
-                lprint(['Positions are open on the market, holding on until ready...'])    
+                logger.lprint(['Positions are open on the market, holding on until ready...'])    
                 positions_first_checked = False 
             time.sleep(sleep_timer)
         except KeyboardInterrupt: 
             exit(0) 
         except: 
             retry = False   
-    lprint(['No positions open, ready to start'])           
+    logger.lprint(['No positions open, ready to start'])           
          
 ### Inserting in the sqlite db if started fine  
 sql_string = "INSERT INTO buys(market, abort_flag, price_fixed, price, source_position, mode, exchange) VALUES ('{}', 0, {}, {}, {}, '{}', '{}')".format(market, int(fixed_price_flag), fixed_price, source_position, mode, exchange)
@@ -628,7 +487,7 @@ while buy_flag and approved_flag:
         # Checking existing orders
         if buy_uuid != None: 
             ### 4.1. Get information on the existing orders and cancel them
-            lprint(['>>> Cancelling:' , buy_uuid, exchange, market])    
+            logger.lprint(['>>> Cancelling:' , buy_uuid, exchange, market])    
             
             # If we are on bitmex - first we need to get the order info and then to cancel 
             if exchange == 'bitmex': 
@@ -668,7 +527,7 @@ while buy_flag and approved_flag:
                 sum_paid += Decimal(str(source_filled))   
                 sum_quantity += quantity_filled  
                 str_status = '{} filled {}, {} filled: {}'.format(currency, quantity_filled, trade, source_filled) 
-            lprint([str_status])    
+            logger.lprint([str_status])    
 
         ### 4.3. Timer update
         timer_now = time.time()
@@ -679,34 +538,34 @@ while buy_flag and approved_flag:
             fixed_price_flag = False 
             orders_check = 5
             comm_string = "Fixed price order could not be filled for " + market + " within required timeframe. Switching to market prices now."
-            lprint([comm_string])
-            send_notification('Update', comm_string)
+            logger.lprint([comm_string])
+            aux_functions.send_notification(market, chat, 'Update', comm_string)
             sql_string = "UPDATE buys SET price_fixed = {} WHERE job_id = {}".format(int(fixed_price_flag), job_id)     # updating the DB 
             rows = query(sql_string)
 
         ### 4.4. Checking the cancellation flag
         approved_flag = check_cancel_flag()
         if approved_flag == False: 
-            lprint(["Shutdown was requested via Telegram"])   
+            logger.lprint(["Shutdown was requested via Telegram"])   
             cancel_stat = cancel(exchange, market, buy_uuid)
             time.sleep(5) # wait for it to be cancelled 
             sleep_timer = 0
         
         ### 4.5. Updating how much of source position (e.g. BTC) do we have left and placing a buy order if required
         source_position = ( Decimal(str(source_position)) - Decimal(str(source_filled))  ) * Decimal(str(1 - comission_rate)) 
-        lprint(["Updated source position considering commission:", source_position])   
+        logger.lprint(["Updated source position considering commission:", source_position])   
         
         if approved_flag: 
             if fixed_price != 0:
                 if (mode == 'reg') or (mode == 'now'):  
-                    lprint([exchange, market, ': buying for', source_position, '@', fixed_price])    
+                    logger.lprint([exchange, market, ': buying for', source_position, '@', fixed_price])    
                 elif mode == 'brk': 
-                    lprint([exchange, market, ': buying on breakout target', source_position, '@', breakout_target])    
+                    logger.lprint([exchange, market, ': buying on breakout target', source_position, '@', breakout_target])    
             else: 
-                lprint([exchange, market, ': buying for', source_position, '@ market price'])    
+                logger.lprint([exchange, market, ': buying for', source_position, '@ market price'])    
         
         ### 4.6. Get the current price value
-        price_curr = get_last_price(market)
+        price_curr = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
         if fixed_price_flag != True:      
             sql_string = "UPDATE buys SET price = {} WHERE job_id = {}".format(price_curr, job_id)    
             rows = query(sql_string)
@@ -725,27 +584,27 @@ while buy_flag and approved_flag:
                     # Checking if we should buy or whether it is too early
                     # ensure_balance()  # logic changed
                     fixed_price_starter = ensure_buy()    
-                    lprint(["Buy trigger", fixed_price_starter])
+                    logger.lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
-                        fixed_price = get_last_price(market)
-                        lprint([exchange, market, ': target price', fixed_price, 'reached and confirmed, start placing buy orders'])    
+                        fixed_price = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
+                        logger.lprint([exchange, market, ': target price', fixed_price, 'reached and confirmed, start placing buy orders'])    
                     # Otherwise, we will continue in the next loop until we get confirmation on the reversal
                 else: 
-                    lprint([exchange, market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
+                    logger.lprint([exchange, market, ': target price', fixed_price, 'not reached. Current:', price_curr])    
                     
             ## Mode: If we are waiting for a breakout  - the logic is simple 
             if mode == 'brk':
                 if price_curr >= breakout_target:  
-                    lprint([exchange, market, ': breakout price', breakout_target, 'reached confirming.'])    
+                    logger.lprint([exchange, market, ': breakout price', breakout_target, 'reached confirming.'])    
                     # Checking if we should buy or whether the price is jumping back
                     # ensure_balance()  # logic changed
                     fixed_price_starter = ensure_buy()   
-                    lprint(["Buy trigger", fixed_price_starter])
+                    logger.lprint(["Buy trigger", fixed_price_starter])
                     if fixed_price_starter == True: 
-                        fixed_price = get_last_price(market)
-                        lprint([exchange, market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
+                        fixed_price = coinigy.get_avg_price(exchange, exchange_abbr, market, logger)
+                        logger.lprint([exchange, market, ': breakout price', breakout_target, 'reached and confirmed, start placing buy orders'])    
                 else: 
-                    lprint([exchange, market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
+                    logger.lprint([exchange, market, ': breakout price', breakout_target, 'not reached. Current:', price_curr])    
             
             ## Mode: If requested to buy now 
             if mode == 'now':
@@ -761,7 +620,7 @@ while buy_flag and approved_flag:
                 if (time_hour_update <> time_hour): 
                 
                     # Updating the current hour and the TD values 
-                    lprint(['Updating the candles price data'])    
+                    logger.lprint(['Updating the candles price data'])    
                     time_hour = time_hour_update
                     del bars                         # memory optimisation 
                     del bars_extended       # memory optimisation  
@@ -780,27 +639,27 @@ while buy_flag and approved_flag:
                                         
                 # If extended is used - print info         
                 if mode == 'fullta': 
-                    lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
+                    logger.lprint(['> Extended price action direction:', bars_extended['td_direction'].iloc[-1] ])    
                 
                 # Different conditions depending on long / short: 
                 if not short_flag: # LONGS  
                     check_value = bars['high'].iloc[-2] * (1 + diff_threshold)
-                    lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
-                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
+                    logger.lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
+                    logger.lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar high + threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])       
                     # We should not buy when a setup is finishing 
                     if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (price_curr > check_value) and (bars['td_setup'].iloc[-1] < 7):  
                         fixed_price_starter = True 
                     else: 
-                        lprint(["> Long buy condition not met"])
+                        logger.lprint(["> Long buy condition not met"])
                 else: #SHORTS 
                     check_value = bars['low'].iloc[-2] * (1 - diff_threshold)
-                    lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
-                    lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar low - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])      
+                    logger.lprint([ '>', exchange, "TD setup (prev bar):", bars['td_setup'].iloc[-2], "| TD direction (this bar):", bars['td_direction'].iloc[-1], "TD direction (prev bar):", bars['td_direction'].iloc[-2] ])       
+                    logger.lprint([ '>', exchange, "Checking condition. Price_curr:", price_curr, "| bar low - threshold:", check_value, "| direction:", bars['td_direction'].iloc[-1] ])      
                     # We should not buy when a setup is finishing 
                     if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (price_curr < check_value) and (bars['td_setup'].iloc[-1] < 7):  
                         fixed_price_starter = True 
                     else: 
-                        lprint(["> Short buy condition not met"])
+                        logger.lprint(["> Short buy condition not met"])
      
         ### If meeting conditions for fixed price - get the current price   
         if fixed_price_flag and fixed_price_starter: 
@@ -814,14 +673,14 @@ while buy_flag and approved_flag:
                     fixed_price = float(getorderbook(exchange, market, 'bids')[0]['Rate'])
             # for other cases (not fullta or 4h mode) like now or breakout - just get the averaged ticker price 
             else: 
-                fixed_price = get_last_price(market)        
+                fixed_price = coinigy.get_avg_price(exchange, exchange_abbr, market, logger) 
                 
         ### Price conditions with floating price 
         if (fixed_price_flag != True) and (float_price_starter != True): 
-            lprint(["Starting for the floating (market) price"])
+            logger.lprint(["Starting for the floating (market) price"])
             # Checking for non-4h (time interval-based) cases 
             float_price_starter = ensure_buy()   
-            lprint(["Buy trigger", float_price_starter])
+            logger.lprint(["Buy trigger", float_price_starter])
                               
         ### 4.7. Checking how much is left to buy and setting the price      
         # print "Source filled:", source_filled, " source start:", source_start     #DEBUG 
@@ -830,13 +689,13 @@ while buy_flag and approved_flag:
 
         if (ratio < 0.96 or ratio == 0) and (approved_flag):           
             if ratio > 0: # DEBUG  
-                lprint(['Ratio:', ratio])  
+                logger.lprint(['Ratio:', ratio])  
             # If we are using market price (smartbuy)
             if fixed_price_flag != True:      
                 # Getting prices if we have not specified a fixed one 
                 orderbook = getorderbook(exchange, market)
                 if float_price_starter: 
-                    lprint(['>> Number of orders used:', orders_check])  
+                    logger.lprint(['>> Number of orders used:', orders_check])  
                 for elem in orderbook[:orders_check]: 
                     buy_rate += elem['Rate']
                 buy_rate = round(buy_rate/orders_check, 8)
@@ -851,7 +710,7 @@ while buy_flag and approved_flag:
             ### 4.8. Placing buy order when requirements are met
             if (fixed_price_flag and fixed_price_starter) or ((fixed_price_flag != True) and (float_price_starter)):                
                 str_status = 'Used rate: {}'.format(buy_rate)  
-                lprint([str_status])    
+                logger.lprint([str_status])    
                 quantity = round(Decimal(str(source_position))/Decimal(str(buy_rate)), 6)                
  
                 if exchange == 'bitmex': # need to do this in contracts because the api returns contracts and not xbt filled           
@@ -867,13 +726,13 @@ while buy_flag and approved_flag:
                         #print "Quantity (xbt) {}, buy_rate {}, contracts {}".format(quantity, buy_rate, contracts) # DEBUG 
     
                 str_status = 'Quantity to buy {}'.format(quantity)  
-                lprint([str_status])    
+                logger.lprint([str_status])    
                      
                 # Simulation mode
                 if wf_run_mode == 's' or wf_run_mode == 'sns' or wf_run_mode == 'reg-s' or wf_run_mode == 'brk-s':
                     buy_flag = False 
                     sleep_timer = 0 
-                    lprint(['Bought in simulation'])  
+                    logger.lprint(['Bought in simulation'])  
                     sum_quantity = quantity
                     avg_price = buy_rate
                     
@@ -895,7 +754,7 @@ while buy_flag and approved_flag:
                             buy_result = buylimit(exchange, market, quantity, buy_rate)  
 
                         #print "\n>>> Result", buy_result #DEBUG
-                        lprint(["-------------------------------------------------------------------- \n>> Result:", buy_result, "\n--------------------------------------------------------------------"])  # DEBUG # 
+                        logger.lprint(["-------------------------------------------------------------------- \n>> Result:", buy_result, "\n--------------------------------------------------------------------"])  # DEBUG # 
                         
                         if buy_result == 'MIN_TRADE_REQUIREMENT_NOT_MET': 
                             # If trade requirement were not met or an error occured       
@@ -906,14 +765,14 @@ while buy_flag and approved_flag:
                             # If the requirements were met 
                             try: 
                                 buy_uuid = buy_result['uuid']
-                                lprint(['>> Placed order', buy_uuid])    
+                                logger.lprint(['>> Placed order', buy_uuid])    
                             except: 
                                 # If something else is wrong    
                                 buy_flag = False 
                                 sleep_timer = 0 
                                 err_msg = traceback.format_exc()
                                 comm_string = '{} issue. Reason: {}'.format(market, err_msg)
-                                lprint([comm_string])    
+                                logger.lprint([comm_string])    
                                 chat.send(comm_string) 
                                 # Also cancelling workflow until we figure out what's up 
                                 wf_id = None
@@ -939,12 +798,12 @@ while buy_flag and approved_flag:
     except: 
         err_msg = traceback.format_exc()
         comm_string = '{} buy task stopped. {} {} spent. Reason: {}'.format(market, sum_paid, trade, err_msg)
-        lprint([comm_string])    
-        send_notification('Error', comm_string)
+        logger.lprint([comm_string])    
+        aux_functions.send_notification(market, chat, 'Error', comm_string)
         # Cancel the orders 
         if buy_uuid != None: 
             # Get info and cancel 
-            lprint(['Cancelling:' , buy_uuid])    
+            logger.lprint(['Cancelling:' , buy_uuid])    
             cancel_stat = cancel(exchange, market, buy_uuid)
         # Deleting the task from the db 
         sql_string = "DELETE FROM buys WHERE job_id = {}".format(job_id)
@@ -979,7 +838,7 @@ if sum_quantity > 0:
                 avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)    # cause we are buying contracts there  
         else: 
             avg_price = round(Decimal(sum_paid) / Decimal(str(sum_quantity)), 8)
-        lprint(['Average price paid:', avg_price])    
+        logger.lprint(['Average price paid:', avg_price])    
     else:
         # If simulation
         sum_paid = source_position
@@ -994,8 +853,8 @@ if sum_quantity > 0:
         comm_string = "{}: buy orders completed on {}, opened a position for {} contracts. Direction: {}".format(market, exchange, sum_quantity, direction_desc)
     else: 
         comm_string = "{}: buy orders completed on {} at the total amount of {} and the average price {}.\nBought {} {}.".format(market, exchange, sum_paid, avg_price, sum_quantity, currency)
-    send_notification('Bought', comm_string)
-    lprint([comm_string])    
+    aux_functions.send_notification(market, chat, 'Bought', comm_string)
+    logger.lprint([comm_string])    
     
     # Updating workflow info if we have a workflow 
     if wf_id is not None: 
@@ -1026,11 +885,11 @@ if sum_quantity > 0:
                 copyfile('/home/illi4/Robot/Trade_history.xlsx', '/mnt/hgfs/Shared_folder/Trade_history.xlsx')
             ''' 
         except: 
-            lprint(['Trade history xls unavailable']) 
+            logger.lprint(['Trade history xls unavailable']) 
 
 else: 
-    send_notification('Cancelled', exchange + ':' + market + ': buy order was cancelled and nothing was bought')
-    lprint([market, ': buy order was cancelled and nothing was bought'])    
+    aux_functions.send_notification(market, chat, 'Cancelled', exchange + ':' + market + ': buy order was cancelled and nothing was bought')
+    logger.lprint([market, ': buy order was cancelled and nothing was bought'])    
     # Delete workflow for this market
     if wf_id is not None: 
         sql_string = "DELETE FROM workflow WHERE wf_id = {}".format(wf_id)
@@ -1068,7 +927,7 @@ if wf_id is not None:
         
         # The short_flag can be inconsistent with the original record if the fullta mode (automatic) was used and the direction flipped - handling this here
         if (not short_flag and (float(wf_info_tp) < float(wf_info_sl))) or (short_flag and (float(wf_info_tp) > float(wf_info_sl)) ):
-            lprint(['Flipping TP and SL values in line with the direction. Short_flag:' , short_flag])    
+            logger.lprint(['Flipping TP and SL values in line with the direction. Short_flag:' , short_flag])    
             wf_info_tp, wf_info_sl = wf_info_sl, wf_info_tp
                  
         print '>>> Start a profit task: {} {} {} {} {} {}'.format(wf_stop_mode, exchange_abbr, wf_info_market, wf_info_price, wf_info_tp, wf_info_sl)

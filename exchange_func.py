@@ -14,6 +14,7 @@ from decimal import Decimal, getcontext
 import ccxt   
 from exchanges.bittrex.client import bittrex # bittrex module with api and success flag check by default
 
+
 ################################ Config ############################################
 # Config file 
 import config 
@@ -45,6 +46,7 @@ def market_std(market):
         pass 
     return market 
 
+    
 #### Bitstamp functions - need to be finalised if required 
 '''
 def bitstamp_ticker(market): 
@@ -744,3 +746,55 @@ def closepositions(exchange, positions, market, price):
         return bitmex_closepositions(positions, market, price) 
     else:
         return 0
+
+def cancel_orders(exchange, market):    
+    my_orders = getopenorders(exchange, market)
+    # print "Orders", my_orders #DEBUG 
+    if my_orders <> '': 
+        for val in my_orders:
+            logger.lprint(["Cancelling open order:", val['OrderUuid'], "quantity", val['Quantity'], 
+                   "quantity remaining", val['QuantityRemaining'], "limit", val['Limit'], "price", val['Price']
+                   ])
+            cancel_stat = cancel(exchange, market, val['OrderUuid'])
+
+##################### Getting several last prices in short intervals instead of just one 
+'''
+def get_avg_price(exchange, exchange_abbr, market): 
+   
+    ticker_upd = {}
+    price_upd = 0
+    failed_attempts = 0
+    for i in range(1, steps_ticker + 1):
+        try:
+            ticker_upd = coinigy.price(exchange_abbr, market)
+            price_upd += ticker_upd
+        except:
+            failed_attempts += 1
+        
+    # Logging failed attempts number
+    if failed_attempts > 0: 
+        logger.lprint(["Failed attempts to receive price:", failed_attempts])    
+        
+    # If retreiving prices fails completely
+    if failed_attempts == steps_ticker:     
+        ticker_upd = None  
+        try:
+            send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+        except: 
+            logger.lprint(["Failed to send notification"])    
+            
+        while ticker_upd is None: 
+            time.sleep(300) # sleeping for 5 minutes and checking again
+            logger.lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
+            try:
+                ticker_upd = coinigy.price(exchange_abbr, market)
+            except: 
+                ticker_upd = None
+            price_upd = ticker_upd
+            
+    # Get the average price 
+    else: 
+        price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
+        
+    return price_upd
+''' 

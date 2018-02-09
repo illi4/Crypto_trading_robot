@@ -8,6 +8,18 @@ from exchange_func import getticker, market_std
 
 # Config 
 import config 
+ 
+### Interval and number of checks to get current (last) prices 
+steps_ticker = config.steps_ticker 
+sleep_ticker = config.sleep_ticker       
+
+## Steps and timer for buybacks 
+candle_steps = config.candle_steps         
+candle_sleep = config.candle_sleep       
+speedrun = config.speedrun
+
+sleep_ticker = int(sleep_ticker/speedrun)
+candle_steps = int(candle_steps/speedrun)
 
 # Coinigy functions 
 class coinigy(object):
@@ -80,7 +92,45 @@ class coinigy(object):
                     count += 1
                     time.sleep(0.5)
             return float(price_ticker)
+    
+    # Get average prices  
+    def get_avg_price(self, exchange, exchange_abbr, market, logger): 
+        ticker_upd = {}
+        price_upd = 0
+        failed_attempts = 0
+        for i in range(1, steps_ticker + 1):
+            try:
+                ticker_upd = self.price(exchange_abbr, market)
+                price_upd += ticker_upd
+            except:
+                failed_attempts += 1
             
+        # Logging failed attempts number
+        if failed_attempts > 0: 
+            logger.lprint(["Failed attempts to receive price:", failed_attempts])    
+            
+        # If retreiving prices fails completely
+        if failed_attempts == steps_ticker:     
+            ticker_upd = None  
+            try:
+                send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+            except: 
+                logger.lprint(["Failed to send notification"])    
+                
+            while ticker_upd is None: 
+                time.sleep(300) # sleeping for 5 minutes and checking again
+                logger.lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
+                try:
+                    ticker_upd = self.price(exchange_abbr, market)
+                except: 
+                    ticker_upd = None
+                price_upd = ticker_upd
+                
+        # Get the average price 
+        else: 
+            price_upd = float(price_upd)/float(steps_ticker - failed_attempts)
+        return price_upd 
+    
     def balances(self, filter_name = None): 
         exchanges = {}
         return_result = []
@@ -172,5 +222,98 @@ class coinigy(object):
         str_balance += 'Value in BTC: {}\nValue in {}: ~{}'.format(round(balance_total_btc_val, 3), config.local_curr, balance_aud_val)            
         return str_balance         
             
+    ##################### Candle analysis; returns high, low, and whether the price crossed a value - among N-min intervals (candles) 
+    def candle_analysis(self, exchange, exchange_abbr, market, logger, cross_target): 
+        
+        ticker_upd = {}
+        price_upd = 0
+        price_h = 0
+        price_l = 0 
+        crossed_flag = False
+        failed_attempts = 0
+        
+        for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec) 
+            try:
+                ticker_upd = coinigy.price(exchange_abbr, market) 
+                price_upd = ticker_upd
+                if (price_l == 0) or (price_upd < price_l): 
+                    price_l = price_upd
+                if (price_h == 0) or (price_upd > price_h): 
+                    price_h = price_upd
+                if price_upd >= cross_target: 
+                    crossed_flag = True 
+            except:
+                failed_attempts += 1
+            time.sleep(candle_sleep) 
+            
+        # Logging failed attempts number
+        if failed_attempts > 0: 
+            logger.lprint(["Failed attempts to receive price:", failed_attempts])    
+        
+        # If retreiving prices fails completely
+        if failed_attempts == steps_ticker:     
+            ticker_upd = None  
+            # Could be related to maintenance
+            try:
+                send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+            except: 
+                logger.lprint(["Failed to send notification"])    
+            while ticker_upd is None: 
+                time.sleep(300)  
+                logger.lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
+                try:
+                    ticker_upd = self.price(exchange_abbr, market) 
+                except: 
+                    ticker_upd = None
+                price_upd = ticker_upd
+                
+                # If unsuccessful
+                price_l = 0
+                price_h = 0
+        return price_l, price_h, crossed_flag
+        
+    ##################### Extreme in time series; returns value with the lowest or the highest ticker price among N-min intervals (candles) 
+    # type should be 'H' or 'L' (highest ore lowest in the series) 
+    def candle_extreme(self, exchange, exchange_abbr, market, logger, type): 
 
-     
+        ticker_upd = {}
+        price_upd = 0
+        price_extreme = 0
+        failed_attempts = 0
+        
+        for i in range(1, candle_steps + 1): # 5 min: 100 checks x 3 sec (better indication than 30 checks x 10 sec); 80 x 3 for 4 minutes 
+            try:
+                ticker_upd = self.price(exchange_abbr, market)
+                price_upd = ticker_upd
+                if type == 'L': 
+                    if (price_extreme == 0) or (price_upd < price_extreme): 
+                        price_extreme = price_upd
+                if type == 'H': 
+                    if (price_extreme == 0) or (price_upd > price_extreme): 
+                        price_extreme = price_upd
+            except:
+                failed_attempts += 1
+            time.sleep(candle_sleep) 
+            
+        # Logging failed attempts number
+        if failed_attempts > 0: 
+            logger.lprint(["Failed attempts to receive price:", failed_attempts])    
+            
+        # If retreiving prices fails completely
+        if failed_attempts == steps_ticker:     
+            ticker_upd = None 
+            # Could be related to maintenance
+            try:
+                send_notification('Maintenance', market + ' seems to be on an automatic maintenance. Will try every 5 minutes.')
+            except: 
+                logger.lprint(["Failed to send notification"])    
+            while ticker_upd is None: 
+                time.sleep(300)  
+                logger.lprint(["Market could be on maintenance. Sleeping for 5 minutes."])    
+                try:
+                    ticker_upd = self.price(exchange_abbr, market)
+                except: 
+                    ticker_upd = None
+                price_upd = ticker_upd
+                price_extreme = price_upd
+        return price_extreme
