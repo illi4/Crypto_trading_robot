@@ -811,7 +811,7 @@ def stop_reconfigure(mode = None):
     global status_update
     global rsi_1h, rsi_4h 
     
-    price_flip_upd = False # default is False    
+    price_flip_upd = None # default is none so that we do not update it every time the stop_reconfigure is called 
     price_direction_move = None 
     sl_target_upd = None 
     sl_upd = None 
