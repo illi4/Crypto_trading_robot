@@ -3,11 +3,17 @@
 #### Price-related setup 
 bitmex_margin = 2                                   # then change to 2x and 3x as soon as it works smoothly 
 
+# If enabled, the robot will take minor profits as configured within the price indicator-based movements
+# If the price continues to move higher, 15-min intervals will be checked to reconfigure the threshold 
+take_profit = True 
+take_profit_threshold = 0.045       # 4.5% from the entry 
+
 # If bitmex_postpone_entries is True, buys are not executed on bitmex if there are contracts open already
 # Handy to have this enabled when you have a stop set manually but you would like to reenter as soon as possible in fullta mode after the stop is hit 
 bitmex_postpone_entries = True      
 
 #### Timers 
+
 # Set up the speedrun multiplier if need to test with higher speeds. 1 is normal, 2 is 2x faster 
 speedrun = 1  
 

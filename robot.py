@@ -564,6 +564,7 @@ def sell_orders_info():
 def sell_orders_outcome():
     global no_sell_orders, total_gained, main_curr_from_sell, value_original, commission_total, total_gained_perc, market
     global price_exit, contracts_start # to use in buyback
+    global short_flag
     
     if no_sell_orders != True: 
         # Calculating totals 
@@ -599,7 +600,15 @@ def sell_orders_outcome():
         
         # Send the notification about results    
         # To improve: if bitmex is used, margin should be accounted for 
-        msg_result = '{}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}, short_flag {}'.format(market, str(trade), main_curr_from_sell, str(commission_total),  str(percent_gained), txt_result, str(price_entry), str(price_exit), short_flag)
+        
+        # Emoji to use 
+        if (short_flag and (price_exit < price_entry)) or (not short_flag and (price_exit > price_entry)):
+            emoji_text = '\xF0\x9F\x9A\x80'         # rocket    
+        if (short_flag and (price_exit > price_entry)) or (not short_flag and (price_exit < price_entry)):
+            emoji_text = '\xF0\x9F\x90\xA3'         # chicken    
+        
+        msg_result = '{} {}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}, short_flag {}'.format(emoji_text, market, str(trade), main_curr_from_sell, str(commission_total),  str(percent_gained), txt_result, str(price_entry), str(price_exit), short_flag)        
+ 
         aux_functions.send_notification(market, chat, 'Finished', msg_result) 
         
         # Update the xls register 
@@ -1202,7 +1211,11 @@ def timenow():
     return strftime("%Y-%m-%d %H:%M:%S", localtime())
 
 ###################################################################################
-############################## Main workflow #########################################
+###################################################################################    
+###################################################################################
+############################## MAIN WORKFLOW #####################################
+###################################################################################
+###################################################################################
 ###################################################################################
 
 ### Greetings (for logs readability) 
@@ -1303,7 +1316,8 @@ start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 
 try: 
-    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)            # 35000 entries is enough for 4H and 9H analysis    
+    bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)            
+    # 35000 entries is enough for 4H and 9H analysis    
     
     try: 
         if bars == None: 
@@ -1366,8 +1380,21 @@ for elem in orders_opening:
 flag_notify_m = True
 flag_notify_h = True
 dropped_flag = False
+
+# Defining the take profit level on initial entry if enabled
+take_profit_reached = False 
+if config.take_profit:
+    if not short_flag:
+        take_profit_price = price_entry * (1 + config.take_profit_threshold)
+    else:
+        take_profit_price = price_entry * (1 - config.take_profit_threshold)
+    logger.lprint(["Take profit price:", take_profit_price])
+    take_profit_price_previous = take_profit_price
+    time_bars_15min_initiated = time.time()
+    # First 15-min bars check run 
+    bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
     
-### 9. Start the main cycle
+### 9. Start the main cycle of the robot 
 while run_flag and approved_flag:  
     try:    # try & except is here to raise keyboard cancellation exceptions
         if td_data_available:         # update the stop loss level if due and if we have data
@@ -1393,7 +1420,7 @@ while run_flag and approved_flag:
         rows = query(sql_string)
         
         # Commenting for now because the current approach is always time & price based and the approach should not change when the TP is reached 
-        # Uncomment if you do not plan to use price analysis 
+        # Uncomment if you do not plan to use price analysis or if you would like to create your custom strategy 
         ''' 
         ### Running the main conditions check to trigger take profit / stop loss 
         ## Checking TP reached - for longs / shorts 
@@ -1482,11 +1509,41 @@ while run_flag and approved_flag:
                     chat.send(comm_string)
                     logger.lprint([comm_string])
             
+            # Checking whether a take_profit_price should be updated. Using price data on 15-min candles 
+            if td_data_available and config.take_profit: 
+                time_bars_15min_elapsed = (math.ceil(time.time() - time_bars_15min_initiated ))/60    
+                if time_bars_15min_elapsed >= 15: 
+                    bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
+                    time_bars_15min_initiated = time.time()
+                
+                if (not short_flag) and (price_last > take_profit_price):
+                    # If long and higher, reconfiguring the stop to be 15-min candle open (before the current) 
+                    take_profit_price_previous = take_profit_price
+                    take_profit_price = bars_15min['low'].iloc[-2]
+            
+                if (short_flag) and (price_last < take_profit_price):
+                    take_profit_price_previous = take_profit_price
+                    take_profit_price = bars_15min['high'].iloc[-2]
+                
+                if take_profit_price != take_profit_price_previous: 
+                    logger.lprint(["> Take profit price update:", take_profit_price])
+                    take_profit_reached = True 
+  
+            # Checking whether we should take profit now. Only executing after the initial take profit target is reached 
+            # Accounting for 0.25% margin of error / noise 
+            if config.take_profit and take_profit_reached and not sale_trigger:   
+                if ((not short_flag) and (price_last < take_profit_price*0.9975)) or ((short_flag) and (price_last > take_profit_price*1.0025)): 
+                    # Time to take some profit 
+                    sale_trigger = True             
+                    comm_string = "{}: taking profit as per thresholds".format(market)
+                    chat.send(comm_string)
+                    logger.lprint([comm_string])   
+            
             ### Stop loss triggered 
             if sale_trigger == True:       
                 # Stop-loss triggered
-                logger.lprint(["Triggering pre-profit stop loss on", price_last])
-                aux_functions.send_notification(market, chat, 'Sell: SL', exchange + ' : ' + market + ': Triggering stop loss at the level of ' + str(price_last))
+                logger.lprint(["Triggering stop on", price_last])
+                aux_functions.send_notification(market, chat, 'Sell: SL', exchange + ' : ' + market + ': Triggering stop at the level of ' + str(price_last))
                 status = sell_now(price_last)
                 # Handling results
                 run_flag, stat_msg = process_stat(status)
