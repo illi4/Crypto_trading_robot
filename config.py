@@ -1,7 +1,7 @@
 ############################### Configuration file ############################################################
 
 #### Price-related setup 
-bitmex_margin = 2                                   # 2x and 3x as soon as it works smoothly 
+bitmex_margin = 2                                   # 1x to 3x is recommended
 
 # If enabled, the robot will take minor profits as configured within the price indicator-based movements
 # If the price continues to move higher, 15-min intervals will be checked to reconfigure the threshold 
@@ -81,6 +81,8 @@ binance_secret = 'secret'
 
 bitmex_apikey = 'key'
 bitmex_secret = 'secret'
+# Uncomment if you want to use bitmex testnet 
+# bitmex.urls['api'] = bitmex.urls['test']
 
 ## Coinigy keys 
 coinigy_key = 'key' 
