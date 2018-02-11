@@ -73,28 +73,28 @@ cmd_init_buy = 'gnome-terminal --tab --profile Active -e "python ' + nix_folder 
 ############### API KEYS ########################
 
 # Initialising clients with api keys 
-bittrex_apikey = 'f781c24798ea46e18d4b7f03b97dd5ca'
-bittrex_secret = 'c0a9b24fdb134fdc8d1c198777aff1c1'
+bittrex_apikey = 'key'
+bittrex_secret = 'secret'
 
-binance_apikey = 'IKxJzKZCmg4V75EC6BYovZ743mwxcVoeQGiKAqJj6ONq9FAMzWkBrtHNHqHHB4jy'
-binance_secret = 'pQ7QiGE5UlghLZyEorQmOWaequRFZIFDYZebJHH7TQkrbeFkeJxCBPWVJqOy80Tl'
+binance_apikey = 'key'
+binance_secret = 'secret'
 
-bitmex_apikey = 'Wc3xtJK6Nvc4QBN7VX0xpHov'
-bitmex_secret = 'GGb3WBF1yRiXwxwVUTL1v4P4-mGodwG9TyERVKAfvyXK6wCS'
+bitmex_apikey = 'key'
+bitmex_secret = 'secret'
 
 ## Coinigy keys 
-coinigy_key = '002741b64ab83f8684bf1b819c61f791' 
-coinigy_secret = '7a987d3ab5e6e3b8d5e28ab2c5adce7b'
+coinigy_key = 'key' 
+coinigy_secret = 'secret'
 
 ############## Telegram settings ####################
 
 # Telegram functions 
-telegram_token = "448179496:AAHSv5-Wky_Y27OEFLLzgn6ZCwsdnOPXd4o"
+telegram_token = "YOUR_TOKEN"
 telegram_url = "https://api.telegram.org/bot{}/".format(telegram_token)
 
-telegram_key = "002741b64ab83f8684bf1b819c61f791" 
-telegram_secret = "7a987d3ab5e6e3b8d5e28ab2c5adce7b" 
-telegram_chat_id = 126501560
+telegram_key = "key" 
+telegram_secret = "secret" 
+telegram_chat_id = 1111111111111 # replace with yours 
 telegram_check_sec = 1
 
 ######## Exchanges - commission rates ###############
