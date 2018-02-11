@@ -8,7 +8,7 @@ import os
 ### Logfile class 
 class logfile(object):
     def __init__(self, market, type):
-        self.public = ['initialise', 'write', 'close']
+        self.public = ['initialise', 'write', 'close', 'lprint']
         self.check_dirs(['logs_buy', 'logs_trade', 'system_msg'])       # check directories 
         
         trade_id = market + ' ' + strftime("%Y-%m-%d %H-%M-%S", localtime())
@@ -46,7 +46,16 @@ class logfile(object):
         self.logger.removeHandler(self.handler)
         del self.logger, self.handler
         exit(0)
-
+        
+    # Log and print 
+    def lprint(self, arr):
+        msg = ' '.join(map(lambda x: ''+ str(x), arr))
+        try: 
+            self.write(msg)
+            print msg
+        except: 
+            print 'Failed to print output due to the IO error'
+        
     def close(self):
         self.logger.removeHandler(self.handler)
         del self.logger, self.handler

@@ -399,7 +399,7 @@ def buy_back(price_base):
             # Sleeping 
             time.sleep(sleep_timer_buyback)     
             
-    ## If there is detailed 4H (or larger interval) data available 
+    ## If there is detailed 4H (or larger interval) data available (td_data_available) 
     else: 
         # Update to set stops according to 4H candles and TD 
         if td_first_run: 
@@ -442,56 +442,77 @@ def buy_back(price_base):
             
             if bars['td_direction'].iloc[-2] == 'up': #LONGS potential 
                 logger.lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle high:", bars['high'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
-                if bars_check_avail: 
+                if bars_check_avail and not config.ride_pullbacks: 
                     logger.lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
-                else: 
-                    logger.lprint(["Extended timeframe price data unavailable"])    
             elif (bars['td_direction'].iloc[-2] == 'down') and (exchange == 'bitmex'): #SHORTS potential, only for bitmex 
                 logger.lprint([  exchange, market, "TD setup:", bars['td_setup'].iloc[-2], "| TD direction:", bars['td_direction'].iloc[-2], "4H candle low:", bars['low'].iloc[-2], "Current price:", price_upd, "Time elapsed (min):", time_elapsed  ])    
-                if bars_check_avail: 
+                if bars_check_avail and not config.ride_pullbacks: 
                     logger.lprint([  exchange, market, "TD setup (extended):", bars_extended['td_setup'].iloc[-2], "| TD direction:", bars_extended['td_direction'].iloc[-2] ])    
-                else: 
-                    logger.lprint(["Extended timeframe price data unavailable"])    
-                    
+         
             # Updating DB
             if bb_id is not None: 
                 sql_string = "UPDATE bback SET curr_price = {} WHERE id = {}".format(price_upd, bb_id) 
                 rows = query(sql_string)
             
-            ## Checking if we should buy back 
-            # Check longs 
-            if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 30) and (price_upd > (bars['high'].iloc[-2])*(1 + var_contingency)):      # switching to long    
-                # Depending on the short flag 
-                if not short_flag:  # same direction - checking bars_extended 
-                    bars_check = bars_extended
-                else:   # different direction - checking a larger period 
-                    bars_check = bars_ext_opposite
-                # Checking the conditions                 
-                if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'up') or (bars_check_avail == False): 
-                    bback_result = True 
-                    direction = 'up'
-                    flag_reb_c = False 
-                    logger.lprint(["TD buyback initiated on the long side"])
-                    if bars_check_avail == False: 
-                        logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
-            
-            # Check shorts, only for bitmex
-            if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - var_contingency)) and (exchange == 'bitmex'):     
-                # This should _not_ be done on setup 7,8, or 9 
-                if (bars['td_setup'].iloc[-1] < 7):
-                    # Depending on the short flag 
-                    if short_flag:  # same direction - checking bars_extended 
-                        bars_check = bars_extended
-                    else:     # different direction - checking a larger period 
-                        bars_check = bars_ext_opposite
-                    # Checking the conditions      
-                    if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
+            ## CHECKING if we should reopen the position (buy back)  
+            # Different strategy depending on the config.ride_pullbacks. 
+            # A. If enabled - should happen quicker and no extended interval is checked 
+            if config.ride_pullbacks: 
+                # Check longs 
+                if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 10) and (price_upd > (bars['high'].iloc[-2])*(1 + var_contingency)):      # switching to long    
+                    # This should _not_ be done on setup 7,8, or 9 
+                    if (bars['td_setup'].iloc[-1] < 7):
+                        bback_result = True 
+                        direction = 'up'
+                        flag_reb_c = False 
+                        logger.lprint(["TD buyback initiated on the long side, riding the pullback"])
+                  
+                # Check shorts, only for bitmex
+                if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 10) and (price_upd < (bars['low'].iloc[-2])*(1 - var_contingency)) and (exchange == 'bitmex'):     
+                    # This should _not_ be done on setup 7,8, or 9 
+                    if (bars['td_setup'].iloc[-1] < 7):
                         bback_result = True 
                         direction = 'down'
                         flag_reb_c = False 
-                        logger.lprint(["TD buyback initiated on the short side"])
-                        if bars_check_avail == False: 
-                            logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
+                        logger.lprint(["TD buyback initiated on the short side, riding the pullback"])
+                                
+            # B. If we do not want to ride pullbacks 
+            else: # Checking the larger interval and more stringent conditions           
+                # Check longs 
+                if (bars['td_direction'].iloc[-2] == 'up') and (bars['td_direction'].iloc[-1] == 'up') and (time_elapsed > 30) and (price_upd > (bars['high'].iloc[-2])*(1 + var_contingency)):      # switching to long    
+                    # This should _not_ be done on setup 7,8, or 9 
+                    if (bars['td_setup'].iloc[-1] < 7):
+                        # Depending on the short flag, selecting the interval  
+                        if not short_flag:  # same direction - checking bars_extended 
+                            bars_check = bars_extended
+                        else:   # different direction - checking a larger period 
+                            bars_check = bars_ext_opposite
+                        # Checking the conditions                 
+                        if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'up') or (bars_check_avail == False): 
+                            bback_result = True 
+                            direction = 'up'
+                            flag_reb_c = False 
+                            logger.lprint(["TD buyback initiated on the long side"])
+                            if bars_check_avail == False: 
+                                logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
+                
+                # Check shorts, only for bitmex
+                if (bars['td_direction'].iloc[-2] == 'down') and (bars['td_direction'].iloc[-1] == 'down') and (time_elapsed > 30) and (price_upd < (bars['low'].iloc[-2])*(1 - var_contingency)) and (exchange == 'bitmex'):     
+                    # This should _not_ be done on setup 7,8, or 9 
+                    if (bars['td_setup'].iloc[-1] < 7):
+                        # Depending on the short flag 
+                        if short_flag:  # same direction - checking bars_extended 
+                            bars_check = bars_extended
+                        else:     # different direction - checking a larger period 
+                            bars_check = bars_ext_opposite
+                        # Checking the conditions      
+                        if (bars_check_avail and bars_check['td_direction'].iloc[-1] == 'down') or (bars_check_avail == False): 
+                            bback_result = True 
+                            direction = 'down'
+                            flag_reb_c = False 
+                            logger.lprint(["TD buyback initiated on the short side"])
+                            if bars_check_avail == False: 
+                                logger.lprint(["Note that higher - timeframe TD analysis is not available"])    
             
             # Sleeping 
             time.sleep(sleep_timer_buyback)     
@@ -566,6 +587,8 @@ def sell_orders_outcome():
     global price_exit, contracts_start # to use in buyback
     global short_flag
     
+    emoji_text = ''
+    
     if no_sell_orders != True: 
         # Calculating totals 
         total_gained = float(main_curr_from_sell) - float(value_original) - float(commission_total)
@@ -607,8 +630,10 @@ def sell_orders_outcome():
         if (short_flag and (price_exit > price_entry)) or (not short_flag and (price_exit < price_entry)):
             emoji_text = '\xF0\x9F\x90\xA3'         # chicken    
         
+        ''' # Fix the calculations 
         msg_result = '{} {}: Total {} gained from all sales: {}. Commission paid: {}. Trade outcome: {} % {}. \nEntry price: {}, exit price: {}, short_flag {}'.format(emoji_text, market, str(trade), main_curr_from_sell, str(commission_total),  str(percent_gained), txt_result, str(price_entry), str(price_exit), short_flag)        
- 
+        ''' 
+        msg_result = '{} {}: Entry price: {}, exit price: {}, short_flag {}'.format(emoji_text, market, str(price_entry), str(price_exit), short_flag)        
         aux_functions.send_notification(market, chat, 'Finished', msg_result) 
         
         # Update the xls register 
@@ -633,7 +658,7 @@ def sell_orders_outcome():
 ##################### Setting stop loss based on price data
 def stop_reconfigure(mode = None): 
     global db, cur, job_id
-    global time_hour
+    global time_hour, time_hour_comms
     global market, exchange_abbr, strategy 
     global price_entry, short_flag, td_period
     global var_contingency
@@ -650,8 +675,9 @@ def stop_reconfigure(mode = None):
     sl_extreme_upd = None # for the absolute min / max of TD setup 
     
     time_hour_update = time.strftime("%H")
+ 
     if (time_hour_update <> time_hour) or mode == 'now': 
-    
+        
         # Updating the current hour and the TD values 
         time_hour = time_hour_update
         bars_4h = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)     
@@ -691,16 +717,15 @@ def stop_reconfigure(mode = None):
         logger.lprint([  "Price flip analysis: {}, direction current: {}, direction previous: {}, short flag: {}".format(price_flip_upd, price_direction_move,
         price_direction_move_previous, short_flag) ])
         #print "> Returning price_flip_upd {}, sl_target_upd {}, sl_upd {}, sl_p_upd {}, sl_extreme_upd {}".format(price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd)  #DEBUG
-
-        # > DEBUG & COMMS
-        status_update_previous = status_update
+    
+    # Status updates 
+    if ((int(time_hour_update) - int(time_hour_comms)) == 4) or mode == 'now': 
+        time_hour_comms = time_hour_update 
         status_update = "Status update | {} {}: \nextreme_move stop {} \n4h-based stop {} \nprice flip confirmation {}".format(market, exchange_abbr, sl_extreme_upd, sl_target_upd, price_flip_upd)
         status_update += "\nTD: \ncurrent {} {} \nprevious {} {}".format(bars_4h['td_setup'].iloc[-1], bars_4h['td_direction'].iloc[-1], bars_4h['td_setup'].iloc[-2], bars_4h['td_direction'].iloc[-2])
         status_update += "\nRSI: 4H {:.2f}, 1H {:.2f}".format(rsi_4h, rsi_1h)
-        if status_update != status_update_previous: 
-            chat.send(status_update)
-        # < DEBUG & COMMS
-        
+        chat.send(status_update)
+    
     # Updating the db with the current SL value 
     if sl_target_upd is not None: 
         sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target_upd, sl_upd, job_id)
@@ -889,6 +914,29 @@ def ensure_sale(check_price):
 
     return proceed_sale     
 
+##################### Anti-manipulation and anti-flash-crash filter for TD price action available 
+def ensure_td_sale(check_price): 
+    global short_flag
+    global exchange, exchange_abbr, market, logger, market_ref
+    
+    # Checking the last 2 closes of 10-min candles (excluding the current one) 
+    proceed_sale = False       
+    logger.lprint(["Running ensure_sale check for TD price"])
+    
+    bars_10min = td_info.stats(market, exchange_abbr, '10min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
+    logger.lprint([ "Last two 10-min candles close values: {}, {}".format(bars_10min['close'].iloc[-3], bars_10min['close'].iloc[-2]) ])
+    
+    # Selling only if the last 2 closes went beyond our threshold 
+    if not short_flag and (bars_10min['close'].iloc[-2] < check_price) and (bars_10min['close'].iloc[-3] < check_price): 
+        proceed_sale = True 
+    if  short_flag and (bars_10min['close'].iloc[-2] > check_price) and (bars_10min['close'].iloc[-3] > check_price): 
+        proceed_sale = True 
+    
+    # Free up memory 
+    del bars_10min    
+    
+    return proceed_sale     
+    
 ##################### Main sell function to sell at current prices   
 # Will be performed until the balance available for sale is zero or slightly more      
 def sell_now(at_price):
@@ -961,7 +1009,7 @@ def sell_now(at_price):
                     value_original = Decimal(str(contracts_check['contracts_no']))
                 else: 
                     contracts = contracts_check['contracts_no'] 
-                    value_original = Decimal(str(contracts))*Decimal(price_entry) #HERE
+                    value_original = Decimal(str(contracts))*Decimal(price_entry)  
                
                 contracts_start = contracts
                 balance_available = contracts
@@ -1247,6 +1295,7 @@ if tp < sl:
 ''' 
  
 time_hour = time.strftime("%H")     # For periodic updates of TD candles and stops 
+time_hour_comms = time_hour     # For periodic status updates 
   
 # 1. Checking market correctness and URL validity, as well as protecting from fat fingers
 try: 
@@ -1392,7 +1441,7 @@ if config.take_profit:
     take_profit_price_previous = take_profit_price
     time_bars_15min_initiated = time.time()
     # First 15-min bars check run 
-    bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
+    bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)         
     
 ### 9. Start the main cycle of the robot 
 while run_flag and approved_flag:  
@@ -1442,17 +1491,20 @@ while run_flag and approved_flag:
                 
         ## Pierced through stop loss with flip if stop loss is enabled 
         if stop_loss: 
-            # Checking for sequential candle-based signals 
+            # Checking for sequential candle-based signals and exits when there is a flip and an opposite-color candles start trading below each other 
             if (short_flag and price_flip and (price_last >= sl_target)) or ((not short_flag) and price_flip and (price_last <= sl_target)):      
+            #if (short_flag and price_flip and (price_last >= sl_target/2)) or ((not short_flag) and price_flip and (price_last <= sl_target*2)):        #TEST 10 MIN 
                 dropped_flag = True     # changing the flag 
-                logger.lprint(["Hitting pre-moon stop loss threshold:", sl_target])
+                logger.lprint(["Hitting stop loss threshold:", sl_target])
                 # Check if we need to sell 
                 if not td_data_available: 
                     sale_trigger = ensure_sale(sl_target)   
                 else: 
-                    sale_trigger = True                
-                logger.lprint(["Sale (stop) trigger (pre-moon):", sale_trigger])
-                chat.send(market +": exiting based on the time candles (shorter period)")
+                    # We will be checking here if last 10min candles closed above the threshold 
+                    sale_trigger = ensure_td_sale(sl_target)                   
+                logger.lprint(["Sale (stop) trigger:", sale_trigger])
+                if sale_trigger: 
+                    chat.send(market +": exiting based on the time candles (shorter period)")
                  
             # Checking for extreme moves 
             if sl_extreme is not None and not sale_trigger:      # not sale trigger because we are checking this after the 4h-based candles price
@@ -1668,83 +1720,83 @@ else:
 ### 12. Buying back based on 4H action or alternative price action    
 try: 
 
-    # Starting buyback except for the cases when the task was aborted through telegram 
-    if stopped_mode != 'telegram':      
-        logger.lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available])   
-        
-        if exchange == 'bitmex': 
-            buy_trade_price = (main_curr_from_sell)/bitmex_margin
-        else: 
-            buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate)    # commission depending on the exchange. If we do not have TD data
-        
-        # Inserting into buyback information table 
-        sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
-        bb_id, rows = query_lastrow_id(sql_string)      
-        
-        time_bb_initiated = time.time()     # getting a snapshot of time for buyback so that we wait for at least an hour before starting buyback 
-        bb_flag, direction = buy_back(bb_price)      # runs until a result is returned with a confirmation and a direction which defines the next step  
-        
-        # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
-        if bb_flag: 
-            aux_functions.send_notification(market, chat, 'Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
-            
-            # Launching workflow to buy and resume the task with same parameters
-            # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
-            
-            if direction == 'up': #LONGS 
-                sl_price = bb_price * (1 - var_contingency)  # depending on the strategy 
-                tp_price = bb_price * tp
-            elif direction == 'down': 
-                sl_price = bb_price * (1 + var_contingency)  # depending on the strategy 
-                tp_price = bb_price / tp
-
-            #print "bb_price {}, tp {}, var_contingency {}, tp_price {}, sl_price {}".format(bb_price, tp, var_contingency, tp_price, sl_price) # DEBUG 
-                
-            sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
-            wf_id, rows = query_lastrow_id(sql_string)       
-
-            if wf_id is not None: 
-                buy_market = '{0}-{1}'.format(trade, currency)
-                sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange_abbr, wf_id) 
-                job_id, rows = query_lastrow_id(sql_string)
-                
-            # Buy depending on the platform. We will buy @ market price now, and the price entry price is already in the DB
-            if td_data_available: 
-                mode_buy = 'now' 
-            else: 
-                mode_buy = 'reg' 
-
-            logger.close() # closing logs 
-            
-            sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)  # deleting buyback from the table 
-            rows = query(sql_string)
-            
-            # Run a smart buy task now when we have a buyback confirmation 
-            if direction == 'up': #LONGS 
-                python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
-            elif direction == 'down': #SHORTS - need to change plus to minus
-                python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
-            print '>>>' + python_call
-            # Open in the same window 
-            p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
-            while True:
-                out = p.stderr.read(1)
-                if out == '' and p.poll() != None:
-                    break
-                if out != '':
-                    sys.stdout.write(out)
-                    sys.stdout.flush()
-        
-        # If a buyback cancellation was requested 
-        else: 
-            aux_functions.send_notification(market, chat, 'Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
-            # Delete buyback from the DB 
-            sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
-            rows = query(sql_string)
+    # Starting buyback except for the cases when the task was aborted through telegram #Commented now - reconsidered that I still need this  
+    #if stopped_mode != 'telegram':      
+    logger.lprint(["Buyback monitoring started:", stopped_mode, "| TD data availability:", td_data_available, "| Ride pullbacks:", config.ride_pullbacks ])   
     
-    # If telegram stop - just finalise and exit 
-    else:  
-        logger.close_and_exit()
+    if exchange == 'bitmex': 
+        buy_trade_price = (main_curr_from_sell)/bitmex_margin
+    else: 
+        buy_trade_price = float(balance_start) * bb_price * (1 - comission_rate)    # commission depending on the exchange. If we do not have TD data
+    
+    # Inserting into buyback information table 
+    sql_string = "INSERT INTO bback(market, bb_price, curr_price, trade_price, exchange) VALUES ('{}', {}, {}, {}, '{}')".format(market, bb_price, bb_price, buy_trade_price, exchange)
+    bb_id, rows = query_lastrow_id(sql_string)      
+    
+    time_bb_initiated = time.time()     # getting a snapshot of time for buyback so that we wait for at least an hour before starting buyback 
+    bb_flag, direction = buy_back(bb_price)      # runs until a result is returned with a confirmation and a direction which defines the next step  
+    
+    # If we have reached the target to initiate a buyback and there was no cancellation through Telegram
+    if bb_flag: 
+        aux_functions.send_notification(market, chat, 'Buyback', 'Buy back initiated for ' + market + ' on ' + exchange + '. Direction: ' + direction)  
+        
+        # Launching workflow to buy and resume the task with same parameters
+        # Insert a record in the db: workflow(wf_id INTEGER PRIMARY KEY, tp FLOAT, sl FLOAT, sell_portion FLOAT)
+        
+        if direction == 'up': #LONGS 
+            sl_price = bb_price * (1 - var_contingency)  # depending on the strategy 
+            tp_price = bb_price * tp
+        elif direction == 'down': 
+            sl_price = bb_price * (1 + var_contingency)  # depending on the strategy 
+            tp_price = bb_price / tp
+
+        #print "bb_price {}, tp {}, var_contingency {}, tp_price {}, sl_price {}".format(bb_price, tp, var_contingency, tp_price, sl_price) # DEBUG 
+            
+        sql_string = "INSERT INTO workflow(tp, sl, sell_portion, run_mode, price_entry, exchange) VALUES ({}, {}, {}, '{}', {}, '{}')".format(tp_price, sl_price, 0, simulation_param, float(bb_price), exchange_abbr)
+        wf_id, rows = query_lastrow_id(sql_string)       
+
+        if wf_id is not None: 
+            buy_market = '{0}-{1}'.format(trade, currency)
+            sql_string = "UPDATE workflow SET market = '{}', trade = '{}', currency = '{}', exchange = '{}' WHERE wf_id = {}".format(market, trade, currency, exchange_abbr, wf_id) 
+            job_id, rows = query_lastrow_id(sql_string)
+            
+        # Buy depending on the platform. We will buy @ market price now, and the price entry price is already in the DB
+        if td_data_available: 
+            mode_buy = 'now' 
+        else: 
+            mode_buy = 'reg' 
+
+        logger.close() # closing logs 
+        
+        sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)  # deleting buyback from the table 
+        rows = query(sql_string)
+        
+        # Run a smart buy task now when we have a buyback confirmation 
+        if direction == 'up': #LONGS 
+            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(buy_trade_price)])
+        elif direction == 'down': #SHORTS - need to change plus to minus
+            python_call = 'python smart_buy.py ' + ' '.join([mode_buy, exchange_abbr, trade + '-' + currency, str(-buy_trade_price)])
+        print '>>>' + python_call
+        # Open in the same window 
+        p = subprocess.Popen(python_call, shell=True, stderr=subprocess.PIPE)
+        while True:
+            out = p.stderr.read(1)
+            if out == '' and p.poll() != None:
+                break
+            if out != '':
+                sys.stdout.write(out)
+                sys.stdout.flush()
+    
+    # If a buyback cancellation was requested 
+    else: 
+        aux_functions.send_notification(market, chat, 'Buyback', 'Buy back cancelled as requested for ' + market + ' on ' + exchange) 
+        # Delete buyback from the DB 
+        sql_string = "DELETE FROM bback WHERE id = {}".format(bb_id)
+        rows = query(sql_string)
+    
+    # If telegram stop - just finalise and exit  - commented 
+    #else:  
+    #    logger.close_and_exit()
     
 except KeyboardInterrupt:
     print "Buyback cancelled or the task was finished"  

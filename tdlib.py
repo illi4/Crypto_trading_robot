@@ -54,12 +54,20 @@ class tdlib(object):
         except: 
             return None 
         
+        # Base for starting time 
+        if period == '15min': 
+            price_base = 15
+        elif period == '10min': 
+            price_base = 10 
+        else: 
+            price_base = 7 # e.g. for 4h 
+        
         transactions_all.index = pd.to_datetime(transactions_all.index, unit='s')  
         transactions_all.index = transactions_all.index + pd.Timedelta(time_delta)  # convert to local time 
         transactions_all['price'] = transactions_all.price.astype(float)
         transactions = transactions_all.tail(nentries).copy()   # take the last N of 30-sec records 
         
-        bars = transactions.price.resample(period, base = 7).ohlc()   
+        bars = transactions.price.resample(period, base = price_base).ohlc()   
         
         # Added for cases when we have a different reference exchange / market for calculating the TD 
         if (market_ref is not None) and (exch_use_ref is not None): 
