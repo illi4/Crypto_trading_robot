@@ -75,7 +75,7 @@ import config
 
 ### TD analysis library
 import tdlib as tdlib
-td_info = tdlib.tdlib()
+
 
 ### Decimal precision and roubding 
 decimal.getcontext().prec = 25
@@ -242,6 +242,7 @@ time.sleep(int(30/speedrun))
 # TD data availability 
 elem = None 
 try: 
+    td_info = tdlib.tdlib()
     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)    
     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)    
     try: 
@@ -264,6 +265,7 @@ try:
         num_null = bars_extended['open'].isnull().sum()
         if num_null > 0: 
             td_data_extended_available = False 
+    del td_info 
 except: 
     td_data_available = False 
     td_data_extended_available = False 
@@ -627,8 +629,10 @@ while buy_flag and approved_flag:
                     del num_null, check_value
                     gc.collect()
                    
+                    td_info = tdlib.tdlib() 
                     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, False, market_ref, exchange_abbr_ref)   
                     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, False, market_ref, exchange_abbr_ref)   
+                    del td_info
                     
                 # Changing short_flag depending on the direction of the larger time interval if we are in the fullta mode 
                 if mode == 'fullta': 

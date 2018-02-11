@@ -69,7 +69,7 @@ import config
 
 ### Price analysis library
 import tdlib as tdlib
-td_info = tdlib.tdlib()
+
 
 ### Platform
 platform = platform.platformlib()
@@ -416,6 +416,7 @@ def buy_back(price_base):
                 # Updating time 
                 time_hour = time_hour_update
                 # Updating TD values 
+                td_info = tdlib.tdlib()
                 bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)     
                 try: 
                     bars_extended = td_info.stats(market, exchange_abbr, td_period_extended, 60000, 15, short_flag, market_ref, exchange_abbr_ref)   
@@ -427,7 +428,8 @@ def buy_back(price_base):
                     bars_check_avail = True 
                 except: 
                     bars_check_avail = False 
-                    
+                del td_info    
+                
             # Check if we need to cancel 
             stop_bback = check_bb_flag()
             if stop_bback: 
@@ -674,6 +676,8 @@ def stop_reconfigure(mode = None):
     sl_p_upd = None  
     sl_extreme_upd = None # for the absolute min / max of TD setup 
     
+    td_info = tdlib.tdlib()
+    
     time_hour_update = time.strftime("%H")
  
     if (time_hour_update <> time_hour) or mode == 'now': 
@@ -730,6 +734,8 @@ def stop_reconfigure(mode = None):
     if sl_target_upd is not None: 
         sql_string = "UPDATE jobs SET sl={}, sl_p={} WHERE job_id={}".format(sl_target_upd, sl_upd, job_id)
         rows = query(sql_string)   
+    
+    del td_info
     
     return price_flip_upd, sl_target_upd, sl_upd, sl_p_upd, sl_extreme_upd
             
@@ -923,6 +929,8 @@ def ensure_td_sale(check_price):
     proceed_sale = False       
     logger.lprint(["Running ensure_sale check for TD price"])
     
+    td_info = tdlib.tdlib()
+    
     bars_10min = td_info.stats(market, exchange_abbr, '10min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
     logger.lprint([ "Last two 10-min candles close values: {}, {}".format(bars_10min['close'].iloc[-3], bars_10min['close'].iloc[-2]) ])
     
@@ -934,6 +942,7 @@ def ensure_td_sale(check_price):
     
     # Free up memory 
     del bars_10min    
+    del td_info
     
     return proceed_sale     
     
@@ -1365,9 +1374,9 @@ start_time = time.time()
 td_data_available = True  # default which will be changed to False when needed  
 
 try: 
+    td_info = tdlib.tdlib()
     bars = td_info.stats(market, exchange_abbr, td_period, 35000, 15, short_flag, market_ref, exchange_abbr_ref)            
     # 35000 entries is enough for 4H and 9H analysis    
-    
     try: 
         if bars == None: 
             td_data_available = False 
@@ -1378,6 +1387,7 @@ try:
         num_null = bars['open'].isnull().sum()
         if num_null > 0: 
             td_data_available = False 
+    del td_info 
 except: 
     td_data_available = False 
     
@@ -1441,7 +1451,9 @@ if config.take_profit:
     take_profit_price_previous = take_profit_price
     time_bars_15min_initiated = time.time()
     # First 15-min bars check run 
+    td_info = tdlib.tdlib()
     bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)         
+    del td_info     
     
 ### 9. Start the main cycle of the robot 
 while run_flag and approved_flag:  
@@ -1563,10 +1575,13 @@ while run_flag and approved_flag:
             
             # Checking whether a take_profit_price should be updated. Using price data on 15-min candles 
             if td_data_available and config.take_profit: 
+                td_info = tdlib.tdlib()
                 time_bars_15min_elapsed = (math.ceil(time.time() - time_bars_15min_initiated ))/60    
                 if time_bars_15min_elapsed >= 15: 
                     bars_15min = td_info.stats(market, exchange_abbr, '15min', 1000, 5, short_flag, market_ref, exchange_abbr_ref)     
                     time_bars_15min_initiated = time.time()
+                
+                del td_info 
                 
                 if (not short_flag) and (price_last > take_profit_price):
                     # If long and higher, reconfiguring the stop to be 15-min candle open (before the current) 
