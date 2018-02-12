@@ -1,6 +1,6 @@
 # Crypto trading robot
 
-**Note**: Please note that the scripts moved to private repository available at [bitbucket](https://bitbucket.org/myspacerocket/crypto_trading_robot/). Please contact me to get an access to it if you are interested. 
+**Note**: Please note that the scripts moved to private repository available at [bitbucket](https://bitbucket.org/myspacerocket/crypto_trading_robot/). Please contact me to get access to it if you are interested. 
 
 ## Background 
 
