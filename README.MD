@@ -1,22 +1,20 @@
 # Crypto trading robot
 
-**Note**: Please note that the scripts moved to private repository available at [bitbucket](https://bitbucket.org/myspacerocket/crypto_trading_robot/). Please contact me to get access to it if you are interested. 
-
 ## Background 
 
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by professional traders. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
+This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by Tone Vays. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
 
-Note that this is not a fully automated bot which works extremely well with no intervention all the time but rather a helper. You would at least need to decide when to open a position and what kind of initial stops would you like to set up. I also recommend analysing the price action and exit your positions deliberately at the best time (good luck with that, though).   
+Provided that you are running price_logger to collect price data (see clarifications further), you can just leave the bot running for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 9 hours) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
 
-However, provided that you are running price_logger to collect price data (see clarifications further), you can just leave the bot running for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 9 hours) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
 - Price action is analysed on shorter (4-hour) and longer (9-hour) intervals (configurable). 
-- In the 'fullta' mode, smart_buy opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus default contingency % configured in the scripts). 
+- When first launched in 'initiate' mode with 'fullta' parameter, buyer() function opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus default contingency % configured in the scripts). 
 - When the job is running, profit can be taken or the position can be stopped with loss if: 
-    * There is a price flip in the opposite direction on 4h (configurable), the current 4h starts trading beyond the previous one +/- a threshold (configurable), and two consecutive closes of 10-minute candles stays beyond the cut-off line. 
-    * There is an extreme move piercing through the whole price setup starting from the number one.  
+    * There is a price flip in the opposite direction on 4h (configurable), the current 4h starts trading beyond the previous one +/- a threshold (configurable), and two consecutive closes of 10-minute candles stay beyond the cut-off line. 
     * There is an exhaustion momentum indicator 9 on 4h bars.
     * RSI reaches extreme values on both 4h and 1h intervals (configurable). 
-- After closing a position, the automatic buyback logic is equivalent to buying in fullta mode and starting a task from there. 
+    * Price falls back back to the entry point. 
+    * There is an extreme move piercing through the whole price setup starting from the number one (this is highly unlikely as it stops at the entry point). 
+- After closing a position, buy_back() function is running to re-enter or open a position in the opposite direction. The automatic buyback logic is equivalent to initiating robot with the fullta parameter. If there was a case of price falling back back to the entry point, then 30-min candles are monitored to be in line with the trend from the previous stopped task (same direction, closing above each other); however, if this fallback happened two times already, scripts just start monitoring 4h and 9h candles. Note the parameter ride_pullbacks in the config. 
 - Taking profit can be enabled to secure smaller but more frequent profits (see the config). By default, I recommend enabling this because the market is still quite volatile even for BTC. If taking profit is enabled, the robot would note when the threshold is reached, hold on until the price stops moving in the needed direction, and then take profit. 
 
 The image below illustrates some (not all) of this logic: 
@@ -28,10 +26,12 @@ The image below illustrates some (not all) of this logic:
 There are quite a number of files and folders in the repository - all of them are needed for the robot to work. All this may look confusing so here is a clarification. 
 
 Folders:. 
+
 - 'ccxt' is a fork of the huge [ccxt library](https://github.com/ccxt/ccxt) which I used to integrate binance and bitmex. Note that the bitmex file is modified to add additional functionality (I will commit to the original ccxt later, but you could use the one located here for now). 
 - 'exchanges' includes a few libraries to work with crypto exchanges. In the current version, it is only needed for bittrex to work whereas the binance and bitmex functions were rewritten to work with ccxt. 
 
 The following scripts are used: 
+
 - Exchange_func.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts. **Note** that your API keys for exchanges should be specified in config.py.
 - Loglib.py is a library with a few logging functions. Similarly, aux_functions.py includes a few auxiliary functions used in the scripts. 
 - Platformlib.py is a library to detect your OS and return proper folders to launch scripts.
@@ -39,13 +39,13 @@ The following scripts are used:
 - Sqltools.py included a few functions to work with workflow.db sqlite database.
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators.
 - Telegramlib.py works with telegram messages (used mostly in daemon). **Note** that you would need to register a telegram bot and configure your tokens / chat id in config.py.
-- **Robot.py** is a core script which performs the monitoring of position prices, sells or buys back, executes stop orders. 
-- **Smart_buy.py** is a core script used to buy positions immediately or in specific conditions.  
+- **Robot.py** is a core script which performs the monitoring of position prices, sells or buys (incl. buying back), executes stop orders. 
 - **Config.py** includes all the settings you need to configure (e.g. time zone, api keys, chat id for telegram, and so on). Timers and price analysis periods are also specified in this file. 
  
 ## Scripts logic and working scripts 
 
-I was too busy writing the code and did not document what logic had been implemented. You could take a look at the scripts to check this out. Just briefly, the following features are implemented in robot and smart_buy scripts: 
+I was too busy writing the code and did not document what logic had been implemented. You could take a look at the scripts to check this out. Just briefly, the following features are implemented in robot and smart_buy scripts:
+
 - Chat notifications when market price info is not available and sleeping until trading resumes 
 - Error handling (checking if there is enough balance, sum above minimum traded amount, amount is fine, etc.) and logging or actions
 - Speedrun mode and simulation mode 
@@ -64,6 +64,7 @@ After registering your API keys on exchanges, you would need to specify them in 
 For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. I really recommend using Coinigy because otherwise you could be blocked from an exchange api even if you run few robots in parallel. Generally, grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
 
 A few other tips which are important: 
+
 - Make sure that you specify a personal chat id (not a group chat id) in the config.py
 - Default terminal to launch the commands is gnome-terminal. If you do not have it, either install it in your environment or change the commands in config.py. On my machine, I am also using a separate profile which specifies that the window should be kept open after a program exits so I see if anything goes wrong. See this [stackoverflow topic](https://stackoverflow.com/questions/4465930/prevent-gnome-terminal-from-exiting-after-execution) for details. 
 - If you are using Nix, ensure that you specify the correct path to scripts in config.py. 
@@ -73,6 +74,7 @@ Note that bitmex has a testnet so that you can reconfigure tokens and try these 
 ### Setting a telegram bot 
 
 Currently, everyone needs to set their own environment which includes registering the telegram bot, setting its menu (if needed), and specifying tokens & chat id in the telegramlib.py. There are several comprehensive guides on the Internet related to this topic, including [the instructions from the telegram core](https://core.telegram.org/bots#botfather). When running, daemon.py supports the following commands sent in a Telegram chat (you can just copy and paste to botfather when configuring commands): 
+
 - status - show running tasks
 - new - run a new take profit (trailing stop) / stop loss task 
 - abort - cancel running tasks 
@@ -173,9 +175,12 @@ Moreover, the code can definitely be cleaned and improved further. E.g. some fun
 
 Please feel free to contribute on github directly or contact me first via Telegram (illi4).
 
-## Donations
+## Tipjar
 
 Donations would be much appreciated so that I can spend more time on coding and research. 
+
 - BTC: 3B9PYDa5PFLDo4YqVi6XgVGf9nMfpJhjC9
+
 - ETH: 0xb52770c0F71BF80aa97CCd79fe93f3F6520787Dc
+
 - LTC: M8TUzJMwCsCey4DvGEDHVW4QrMT2hq7zq7
