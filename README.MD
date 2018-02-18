@@ -1,5 +1,7 @@
 # Crypto trading robot
 
+**Note: the project moved to a private repository on [BitBucket](https://bitbucket.org/myspacerocket/crypto_trading_robot). Contact me if you would like to get access to it.**
+
 ## Background 
 
 This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by Tone Vays. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
