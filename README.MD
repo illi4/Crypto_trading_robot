@@ -19,7 +19,14 @@ Provided that you are running price_logger to collect price data (see clarificat
 - After closing a position, buy_back() function is running to re-enter or open a position in the opposite direction. The automatic buyback logic is equivalent to initiating robot with the fullta parameter. If there was a case of price falling back back to the entry point, then 30-min candles are monitored to be in line with the trend from the previous stopped task (same direction, closing above each other); however, if this fallback happened two times already, scripts just start monitoring 4h and 9h candles. Note the parameter ride_pullbacks in the config. 
 - Taking profit can be enabled to secure smaller but more frequent profits (see the config). By default, I recommend enabling this because the market is still quite volatile even for BTC. If taking profit is enabled, the robot would note when the threshold is reached, hold on until the price stops moving in the needed direction, and then take profit. 
 
-The image below illustrates some (not all) of this logic: 
+The strategy is highly customisable at this point and allows for the following: 
+
+- Configuration of thresholds and time intervals;
+- Parameterisation of: exits on sequential nines, use of countdowns, limiting losses, using larger timeframes, number of intervals to confirm exiting, and so on. 
+
+Specific strategies can be backtested on historical data in simulation mode. 
+
+The image below illustrates some (certainly not all) of the bot logic. 
 
 ![candles_logic](images/candles_upd_z.png?raw=true "Candles_logic")
 
