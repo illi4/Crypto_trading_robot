@@ -2,7 +2,7 @@
 
 Note: If you are a customer, please do the following: 
 
-- check the chat id for your user account by writing /my_id to telegram bot @get_id_bot 
+- check the chat id for your user account by writing /my_id to telegram bot [@get_id_bot](https://telegram.me/get_id_bot) 
 - create bitmex api keys with 'order' access 
 - send your keys and chat id to me (illi4) in a secret chat 
 
