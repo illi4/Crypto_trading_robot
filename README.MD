@@ -6,6 +6,8 @@ Note: If you are a customer, please do the following:
 - create bitmex api keys with 'order' access 
 - send your keys and chat id to me (illi4) in a secret chat 
 
+As a user, you would not worry about setting a bot and configuring scripts. 
+
 ## Background 
 
 This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by Tone Vays. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
@@ -39,11 +41,12 @@ Folders:.
 
 The following scripts are used: 
 
-- Exchange_func.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts. **Note** that your API keys for exchanges should be specified in config.py.
+- Exch_api.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts. **Note** that your API keys for exchanges should be specified in config.py.
 - Loglib.py is a library with a few logging functions. Similarly, aux_functions.py includes a few auxiliary functions used in the scripts. 
 - Platformlib.py is a library to detect your OS and return proper folders to launch scripts.
 - Price_logger.py gets price ticker for various exchanges from coinigy api and saves data in price_log folder. **Note** that you will need to configure the list of tokens and exchanges for which you would like to collect price data in config.py. 
 - Sqltools.py included a few functions to work with workflow.db sqlite database.
+- Gif.py is a wrapper for posting gifs 
 - Tdlib.py is used to analyse the price data and return values of time analysis indicators.
 - Telegramlib.py works with telegram messages (used mostly in daemon). **Note** that you would need to register a telegram bot and configure your tokens / chat id in config.py.
 - Robo_class.py describes the robot class and its attributes. 
@@ -86,15 +89,15 @@ Feel free to use the @Cryptotrader_illi4_bot from telegram. You would need to ge
 
 Then you would need to run daemon.py (which processes telegram commands). When running, daemon.py would supports the following commands sent in a Telegram chat:
 
+- auto - this is the easiest and the most productive way to use the bot. In this mode, you would need to specify contract and btc amount (for example 'usd-btc 0.15') and the robot will start doing its thing using strategy parameters defined in config. I have only been using this piece of functionality lately.   
 - status - show running tasks
-- bitmex_fullta_real - this is the easiest and the most productive way to use the bot. In this mode, you would need to specify contract and btc amount (for example 'usd-btc 0.15') and the robot will start doing its thing using strategy parameters defined in config. I have only been using this piece of functionality lately.   
 - new - run a new take profit (trailing stop) / stop loss task 
 - abort - cancel running tasks 
+- balance - check your balances on exchanges 
+- initiate_position - initiate a position; various modes are supported (including buying in simulation, on breakout, in a regular mode, and immediately)
+- close_position - close a position (from running tp/sl task) immediately 
+- markets - show info on contracts traded on bitmex 
 - workflow - launch a workflow which includes starting a buy task and then a take profit (trailing stop) / stop loss task 
-- balance - check your balances on exchanges; as I am from Australia, this is displaying balance in AUD through USDT which is not quite accurate
-- sellnow - sell a position from running tp/sl task immediately 
-- buy - initiate a buy tasks; various modes are supported (including buying in simulation, on breakout, in a regular mode, and immediately)
-- stopbuy - cancel an active buy task 
 - nlong - create a new record about a long-term holding without any buy/sell tasks
 - rmlong - delete records from longs table (I should have probably called it hodl)
 - stoplistener - stop the monitoring bot 
@@ -204,12 +207,6 @@ Open long contracts for BTC on bitmex on the confirmation of bullishness on 4-ho
 > r bmex 18850 15400
 
 > 4h bmex usd-btc 0.5
-
-### Using price_logger to mitigate the risk of USDT crashing hard 
-
-I genuinely believe that USDT (USD Tether) is a ticking time bomb which will burst one day. However, I had been using it for a while due to its convenience (not anymore). In order to protect myself from a sudden collapse of this token, I added a piece of code in the price_logger script which monitors the usdt-usd exchange rate (on Kraken) and buys BTC for all the available USDT when USDT collapses (USDT-USD ratio 0.93 for more than 15 minutes which did not happen in the past few years). 
-
-I consider Tether a great instrument and a perfect tool for the provision of better liquidity (especially for alts) - however, I am really  concerned with complete disregard of the community concerns by the Tether company and by Bitfinex. More and more tokens are being 'printed' while the community has to keep guessing what is going on. These companies should come up with a public statement and with transparent audits available to public. 
 
 ### Editing the workflow database
 
