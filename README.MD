@@ -1,79 +1,48 @@
-# Crypto trading robot
+# Trading bot 
 
-Note: If you are a customer, please do the following: 
-
-- check the chat id for your user account by writing /my_id to telegram bot [@get_id_bot](https://telegram.me/get_id_bot) 
-- create bitmex api keys with 'order' access 
-- send your keys and chat id to me (illi4) in a secret chat 
-
-As a user, you would not worry about setting a bot and configuring scripts. 
-
-## Background 
-
-This robot was created to help me to exit positions (trailing stops) better, to buy at more appropriate points then 'right now', and also to execute stop losses thoroughly. Out of curiosity, I have also created an integration with Telegram and implemented time analysis to predict price moves inspired by a variation of a well-performing [time series indicator](https://oxfordstrat.com/indicators/td-sequential-2/) used by Tone Vays. The scripts were written for Python 2.7 and have not been tested on Python 3. Currently, 3 exchanges are supported: bitmex, bittrex, and binance. I have not been testing the latter two for a while so I highly recommend to experiment with small amounts first if you run it on bittrex or binance. 
-
-Provided that you are running price_logger to collect price data (see clarifications further), you can just leave the bot running for pretty much forever - it will monitor price action on candles of specified lengths (default it 4 hours and 9 hours) and will open / close long and short positions (shorts are supported on bitmex only). Current rules are set as follows: 
-
-- Price action is analysed on shorter (4-hour) and longer (9-hour) intervals (configurable). 
-- When first launched in 'initiate' mode with 'fullta' parameter, buyer() function opens a position when the indicator is consistent on both time intervals and 4h candle starts trading beyond the previous one (hereinafter - plus or minus default contingency % configured in the scripts). Both TD setup and TD countdown are analysed (countdown can be disabled in config). It does not enter on sequential 7, 8, 9 (can be configured). 
-- When the job is running, profit can be taken or the position can be stopped with loss if: 
-    * There is a price flip in the opposite direction on 4h (configurable), the current 4h starts trading beyond the previous one +/- a threshold (configurable), and two consecutive closes of 10-minute candles stay beyond the cut-off line. 
-    * There is an exhaustion momentum indicator 9 on 4h bars (can be disabled). 
-    * RSI reaches extreme values on both 4h and 1h intervals (configurable). 
-    * Price falls back back to the entry point. 
-    * There is an extreme move piercing through the whole price setup starting from the number one (this is highly unlikely as it stops at the entry point). 
-    * Take profit value is reached and the price stops moving in the required direction. 
-    * If 'limit losses' parameter is enabled and the price on 5-min intervals falls below the limit loss value. 
-- After closing a position, buy_back() function is running to re-enter or open a position in the opposite direction. The automatic buyback logic is equivalent to initiating robot with the fullta parameter. If there was a case of price falling back back to the entry point, then 30-min candles are monitored to be in line with the trend from the previous stopped task (same direction, closing above each other); however, if this fallback happened two times already, scripts just start monitoring 4h and 9h candles. Note the parameter ride_pullbacks in the config. 
-
-The image below illustrates some (but certainly not all) of this logic: 
-
-![candles_logic](images/candles_upd_z.png?raw=true "Candles_logic")
+'UAT' telegram bot token: 707003851:AAH3-v2jluWU1ItJ9AgCyTm_88sghgONpWw 
+Code should be modified on UAT to use testnets instead of live - the keys for testnet are currently **hardcoded** in exch_api.py. 
 
 ## Files 
 
-There are quite a number of files and folders in the repository - all of them are needed for the robot to work. All this may look confusing so here is a clarification. 
+**Note**: workflow.db and models were moved to a [dropbox share](https://www.dropbox.com/sh/8zdibi63k65kndu/AAAhJMi1W5LAknhFqzSrw62Ya?dl=0). Please download them from there and put in the same folder as the repo clone for stuff to work. 
 
-Folders:. 
+Folder **ccxt** is a fork of the huge [ccxt library](https://github.com/ccxt/ccxt) which I used to integrate exchanges such as bitmex. Note that the bitmex file is modified to add additional functionality. It would be a good idea to stop using it and just swith to pure bitmex api instead. 
 
-- 'ccxt' is a fork of the huge [ccxt library](https://github.com/ccxt/ccxt) which I used to integrate binance and bitmex. Note that the bitmex file is modified to add additional functionality (I will commit to the original ccxt later, but you could use the one located here for now). 
-- 'exchanges' includes a few libraries to work with crypto exchanges. In the current version, it is only needed for bittrex to work whereas the binance and bitmex functions were rewritten to work with ccxt. 
+Folder **libs**: 
 
-The following scripts are used: 
+- aux_functions.py: some of helping (auxiliary) functions for message processing, sequences checking etc. 
+- coinigylib.py: class which returns price data and includes a few functions to work with price information.  
+- lambobot.py: class to work with telegram 
+- loglib.py: logger. used to print & log data, as well as log summaries when backtesting 
+- platformlib.py: functions to detect the platform scripts are launched on and to change the terminal commands accordingly  
+- sqltools.py: functions to work with sqlite 
+- tdlib.py: class to perform calculations of technicals (Demark indicator, MA, RSI)
+- telegramlib.py: a lib to work with telegram. can be deprecated if everything is reworked to use the python-telegram-bot lib. 
 
-- Exch_api.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts. **Note** that your API keys for exchanges should be specified in config.py.
-- Loglib.py is a library with a few logging functions. Similarly, aux_functions.py includes a few auxiliary functions used in the scripts. 
-- Platformlib.py is a library to detect your OS and return proper folders to launch scripts.
-- Price_logger.py gets price ticker for various exchanges from coinigy api and saves data in price_log folder. **Note** that you will need to configure the list of tokens and exchanges for which you would like to collect price data in config.py. 
-- Sqltools.py included a few functions to work with workflow.db sqlite database.
-- Gif.py is a wrapper for posting gifs 
-- Tdlib.py is used to analyse the price data and return values of time analysis indicators.
-- Telegramlib.py works with telegram messages (used mostly in daemon). **Note** that you would need to register a telegram bot and configure your tokens / chat id in config.py.
-- Robo_class.py describes the robot class and its attributes. 
-- Backtest.py is a class which enables backtesting by generating new prices and dates from the existing historical file. 
-- **Robot.py** is a core script which performs the monitoring of position prices, sells or buys (incl. buying back), executes stop orders. 
-- **Config.py** includes all the settings you need to configure (e.g. time zone, api keys, chat id for telegram, and so on). Timers and price analysis periods are also specified in this file. 
+Folder **testing - various** includes some testing scripts. An important folder is **testing - backtests** where you could find a bunch of files related to backtesting: 
+
+- td_stat_backfill.py calculates technical indicators from price log files and writes parameters in the workflow.db so that backtesting uses pre-calculated values (makes things fast). Price log should just be a csv file with timestamp and price, see examples shared [on my dropbox](https://www.dropbox.com/sh/77njh1iezxjvm3r/AAAiGKyNs06pw2TImvnwPpUza?dl=0) 
+- generate_sh.py is used to generate testing bash with the combination of parameters specified there (for example, see the output test_nasdaq.sh) 
+- result_transform.py is used to grab all summary logs and put them as columns in an xls file for further analysis. 
+
+**Main folder**: 
+
+- backtest.py is a class which enables backtesting by generating new prices and dates from the existing historical data. 
+- **config.py** includes all the settings you need to configure (e.g. time zone, api keys, chat id for telegram, and so on). Timers and price analysis periods are also specified in this file. Note that the user keys are stored in the database. 
+- daemon.py processes user messages and launches new scripts based on telegram commands. 
+- exch_api.py includes wrappers for functions of specific exchanges (from the 'exchange' folder) so that the data has the same format to be processed by other scripts.  
+- price_log_n_update.py gets price ticker for various exchanges and saves data in price_log folder + updated the current price in DB. **Note** that you need to configure the list of tokens and exchanges for which you would like to collect price data in config.py. 
+- ml_workflow.py is used to generate datapoints, train and test ML models 
+- robo_class.py describes the robot class and its attributes. 
+- **robot.py** is the main script where the magic happens. 
+- predictions_update.py analyses price information (using price log csvs) and updates predictions for used assets in the database. 
  
-## Scripts logic and working scripts 
-
-I was too busy writing the code and did not document what logic had been implemented. You could take a look at the scripts to check this out. Just briefly, the following features are implemented in robot and smart_buy scripts:
-
-- Chat notifications when market price info is not available and sleeping until trading resumes 
-- Error handling (checking if there is enough balance, sum above minimum traded amount, amount is fine, etc.) and logging or actions
-- Speedrun mode and simulation mode 
-- 'Quick' (5-min interval-based) analysis of confirmations on buys and sells, preventing from being shaken out easily 
-- Larger-interval (currently 4H) analysis of price action based on a well-performing indicator for entering and exiting the positions as well as dynamic adjustment of stop loss 
-- Dynamic price changes when buying and selling using orderbooks and time elapsed since the start of the task
-- Pre-profit and post-profit buybacks after exiting the positions 
-- Writing results (gains and losses) in a summary xls file 
-
-Ideally, you should run price_logger non-stop so that you collect historical data which is then used in time analysis. Also, you should run daemon.py which will monitor requests sent through a Telegram chat. **The scripts are much more useful if you have price_logger running so that the robot can use the price data.**
+Ideally, you should run price_logger non-stop so that you collect historical data which is then used in time analysis. Also, you should run daemon.py which will monitor requests sent through a Telegram chat.  
 
 ## How to set things up 
 
 After registering your API keys on exchanges, you would need to specify them in config.py. Also, if you want to use Telegram functionality, create a bot (via botfather), and configure your tokens and chat id in the same file (config.py). 
-
-For price logging, you would need a [Coinigy](https://www.coinigy.com/) account and api keys. I really recommend using Coinigy because otherwise you could be blocked from an exchange api even if you run few robots in parallel. Generally, grabbing prices frequently from exchanges is not a proper solution as they block too frequent requests. Coinigy allows for sending requests quite often so I switched to using it. Note that you can use the robot without having price data, but this would not be as effective as results based on time analysis. 
 
 A few other tips which are important: 
 
@@ -81,146 +50,231 @@ A few other tips which are important:
 - Default terminal to launch the commands is gnome-terminal. If you do not have it, either install it in your environment or change the commands in config.py. On my machine, I am also using a separate profile which specifies that the window should be kept open after a program exits so I see if anything goes wrong. See this [stackoverflow topic](https://stackoverflow.com/questions/4465930/prevent-gnome-terminal-from-exiting-after-execution) for details. 
 - If you are using Nix, ensure that you specify the correct path to scripts in config.py. 
 
-Note that bitmex has a testnet so that you can reconfigure tokens and try these scripts without risking any of your real crypto. 
+Note that bitmex and oanda have a testnet so that you can reconfigure tokens and try these scripts without risking any of your real assets. The type would have to be changed in exch_api, though. 
 
 ### Setting a telegram bot 
 
 Feel free to use the @Cryptotrader_illi4_bot from telegram. You would need to get the chat id for your user account by writing /my_id to telegram bot @get_id_bot. This chat id should be then specified in configs. 
 
-Then you would need to run daemon.py (which processes telegram commands). When running, daemon.py would supports the following commands sent in a Telegram chat:
-
-- auto - this is the easiest and the most productive way to use the bot. In this mode, you would need to specify contract and btc amount (for example 'usd-btc 0.15') and the robot will start doing its thing using strategy parameters defined in config. I have only been using this piece of functionality lately.   
-- status - show running tasks
-- new - run a new take profit (trailing stop) / stop loss task 
-- abort - cancel running tasks 
-- balance - check your balances on exchanges 
-- initiate_position - initiate a position; various modes are supported (including buying in simulation, on breakout, in a regular mode, and immediately)
-- close_position - close a position (from running tp/sl task) immediately 
-- markets - show info on contracts traded on bitmex 
-- workflow - launch a workflow which includes starting a buy task and then a take profit (trailing stop) / stop loss task 
-- nlong - create a new record about a long-term holding without any buy/sell tasks
-- rmlong - delete records from longs table (I should have probably called it hodl)
-- stoplistener - stop the monitoring bot 
-- help - get information on commands parameters and available commands 
-
-You can get clarification on the modes (r/s/rnts and so on) by sending the help command to a telegram bot. 
+Then you would need to run daemon.py (which processes telegram commands).   
 
 ### Setting an environment 
 
-I would recommend setting up a virtual machine or using a cloud VM (AWS or Azure) so that popping screens do not distract you at your usual working environment. You would need to launch daemon.py (for processing your telegram messages) and price_logger.py (for price updates feeding to tdlib). Eventually, you would have an environment like this:  
+I would recommend setting up a virtual machine or using a cloud VM (AWS or Azure) so that popping screens do not distract you at your usual working environment. You would need to launch daemon.py (for processing your telegram messages) and price_logger.py (for price updates feeding to tdlib).  
 
-![screen_example](images/screen_upd.png?raw=true "Screen")
+## Training / testing models  
 
-Alternatively, you can contact me in order to configure this for you. 
+The workflow is as follows: 
 
-### Backtesting 
+**Step 0**
 
-For backtesting, change 'backtesting_enabled' to True in config.py and set up the dates accordingly. When calling the script, almost strategy parameters with start/end dates could be passed through command line. For example, you can write a bat (or an sh) file with the following set of commands: 
+Generates datapoints (pre-calculated features) and saves them in workflow.db. Skip this step if you have the database populated with features already.  
 
-start cmd /k python C:\Robot\robot.py process s bmex usd-btc 1100 3000 300 0.5 --codename=main_backtest --td_period=2h --td_period_extended=12h --limit_loss=1
+Run ml_workflow.py for this with the --step=0 parameter. Example - run: 
+
+```
+python D:\Crypto\Robot\ml_workflow.py --exch=bmex --market=btc/usd --pickle=ML/btc_data_all_upd --proc=4 --start=2014-01-01-00:25 --end=2018-09-20-00:55 --step=0 
+```
+
+For nasdaq you would use --market=NAS100_USD --exch=oanda. Check out see the script output for the explanation of parameters.  
+
+This will generate records in the workflow.db database which will be used on the next steps. 
+
+**Step 1**
+
+Using generated datapoints, run step 1 to read labels intervals file to generate labels and save them to pickle used to train / test the model. Same parameters but use --step=1. The pickle will be created at the path specified in --pickle (ML/btc_data_all_upd). The intervals (csv) file is specified in --labels=...
+
+The generated data will be saved to the specified pickle file.  **Use the same --start and --end as on the step 1 or like in your labeled csv**. 
+
+Exemplary command: 
+```
+python D:\Crypto\Robot\ml_workflow.py --exch=bmex --market=btc/usd --pickle=ML/btc_data_all_upd --labels=ML/interval_data_btc.csv --proc=4 --start=2014-01-01-00:25 --end=2018-09-20-00:55 --step=1
+```
+
+Except for train/test CSV, you should (ideally) have a separate CSV which will only be used for validation. If you have it, specify the paths in the command as well, like this: 
+```
+python D:\Crypto\Robot\ml_workflow.py --exch=bmex --market=btc/usd --pickle=ML/btc_data_all_upd --labels=ML/interval_data_btc.csv --proc=4 --start=2014-01-01-00:25 --end=2018-09-20-00:55 --step=1 --validate_labels=ML/interval_data_btc_validate.csv --pickle_validate=ML/btc_data_all_10_11_validate
+```
+
+This will create a separate pickle for further validation. 
 
 
-start cmd /k python C:\Robot\robot.py process s bmex usd-btc 400 3000 100 0.5 --codename=main_backtest_2016  --start=01.01.2016:00.00 --end=01.04.2017:00.00
+**Step 2**
 
-Note that 0 or 1 is used for bool parameters. The full list of params is: 
+Run --step=2 which requires manipulations with the source code of ml_workflow.py. Note that you only need to input pickle and step so your command would be something like: 
+```
+python ml_workflow.py --pickle=ML/btc_data_all_upd --step=2
+```
 
-'take_profit_threshold', 
-'take_profit_secondary', 
-'buy_delta', 
-'entry_cutoff_level', 
-'cutoff_confirmations_no', 
-'ma_period', 
-'td_period', 
-'rsi_4h_up_extreme', 
-'rsi_1h_up_extreme', 
-'rsi_4h_down_extreme', 
-'rsi_1h_down_extreme', 
-'wait_after_losing_trade_h',
-'enter_on_rsi_8020_target', 
-'limit_losses_val'
+Go to the section ### PARAMS SET UP on the top of the script. 
 
-And bools (call with 0\1): 
-'consider_countdown', 
-'resume_bback_entry_hit', 
-'early_entries_enabled', 
-'consider_ma', 
-'trade_flips', 
-'exit_on_nines', 
-'limit_losses', 
-'wait_after_losing_trade',
-'enter_on_rsi_8020'
+Follow the instructions below and put mentioned parameters inside the set_gridsearch_params function. As soon as you complete one parameter, just fix it in params = { ...} and move to the next.  
 
-## Using the scripts 
 
-### Some examples of how to use all this 
+A. Broader depth / child width: 
+```
+'max_depth':range(3,12,2),
+'min_child_weight':range(1,6,2)
+```
 
-**Example 1**: You are keen to run a task in simulation mode to see how the robot works. The assumption is that you bought 30 LTC on bittrex for your BTC thinking that selling it later would be a profitable trade. Your price was 0.017, take profit target is 0.02, and stop loss level is 0.015. You only want to test it for the quantity of 20 LTC. You will then have the following lovely chat with the configured Telegram bot: 
+B. More specific depth / child width. Example: 
+```
+'max_depth':[8,9,10], 
+'min_child_weight':[1,2,3]
+```
 
-![chat_example_1](images/chat_example_1.png?raw=true "Chat_1")
+Let's say you detected that best params are max_depth 8 and min_child_weight of 3. When you move to the next parameter tuning, fix these 2. Your params will look like: 
+```
+params = {
+     'max_depth':[8],
+     'min_child_weight':[3], 
+    ...
+    }
+```
 
-The task will be launched in simulation (even for buybacks). 
+C. Gamma: 
+```
+'gamma':[i/10.0 for i in range(0,5)]
+```
 
-**Example 2**: Still careful with actually using this tool, you decide to test buying functionality. Let's say that you are collecting price data through price_logger and that you would like to buy based on 4-hour price action method. You are keen to buy BTC for 5500 USDT on binance for a market price on 4-hour confirmation. Then your chat would be: 
+Note: you should have max_depth and min_child_weight specified too. For example: 
+```
+params = {
+     'max_depth':[8],
+     'min_child_weight':[3], 
+     'gamma':[i/10.0 for i in range(0,5)]
+    }
+```
 
-![chat_example_2](images/chat_example_2.png?raw=true "Chat_2")
+D. Sampling: 
+```
+'subsample':[i/10.0 for i in range(6,10)],
+'colsample_bytree':[i/10.0 for i in range(6,10)] 
+```
 
-Similarly, the task will be launched in simulation. 
+E. Sampling - more specific values. E.g.:
+```
+'subsample':[i/100.0 for i in range(75,90,5)],
+'colsample_bytree':[i/100.0 for i in range(75,90,5)]
+```
 
-**Example 3**: Now you see that this stuff works fine and would like to configure something more advanced. For instance, you see that BTC/USDT is looking really bullish and you would like to buy on the breakout at the level of 19650. You consider that your initial take profit target is 20000, you would like to put a tight initial stop loss at 19500, and you are going to spend 5500 USDT. Easy!
+F. Reg alpha: 
+```
+'reg_alpha':[1e-5, 1e-2, 0.1, 1, 100]
+```
+ 
+G. More specific reg_alpha. E.g.: 
+```
+'reg_alpha':[0, 0.001, 0.005, 0.01, 0.05]
+```
 
-![chat_example_3](images/chat_example_3.png?raw=true "Chat_2")
+ 
+**Step 3**
 
-Note that your stop loss will be dynamically reconfigured if you are collecting price data with the price_logger script. 
+It is preferable if you generated a validation pickle on the step 1 so that it could be used now. 
 
-**Example 4**: You would like to set up fully automatic task which works on the USD/BTC pair on bitmex (for 0.5 btc) and enjoy life. For this, call the command /bitmex_fullta_real and then respond with 'usd-btc 0.5'. Similarly, you can do this for other contracts (e.g. 'ETHM18 0.5' where 0.5 is the value in BTC). 
+When you finished with finding the best params, look again at the code of ml_workflow.py and find the function set_best_params. In there, specify the optimal parameters you discovered. Set_best_params would look like: 
+```
+### Set the best parameters here when step 2 is finished
+def set_best_params():
+    best_params = {
+        'max_depth': 8,
+        'min_child_weight': 1,
+        'gamma': 0.1,
+        'subsample': 0.95,
+        'colsample_bytree': 0.9,
+        'reg_alpha': 0,
+        'scale_pos_weight': 0,
+        'learning_rate': 0.01, # appropriate for our XGBoost and features config 
+        'silent': 1,  # logging mode - quiet
+        'objective': 'multi:softprob',  # error evaluation for multiclass training
+        'num_class': 3 # the number of classes that exist in this datset
+    }
+    return best_params
+```
 
-**Additional examples of supported Telegram commands** :
+Then run the command from p.1 specifying --step=3 and putting the model name in --modelname=... 
+You can omit other params so your command would be (if you have a validation dataset): 
+```
+python ml_workflow.py --pickle=ML/btc_data_all_upd --pickle_validate=ML/btc_data_all_10_11_validate --step=3 --modelname=btc_new_model 
+```
+If you do not have a validation pickle, just omit the --pickle_validate parameter. 
 
-Open long contracts on bitmex for XBT (BTC) with the total cost of 0.3 BTC (hereinafter, x times the configured margin) with the regular 5-minute candles based confirmation: 
-> /buy 
+**Note that** boost_rounds and early_stopping should be tuned to prevent overfitting. Here is an example of what happend with too many boost_rounds and no early stopping - at some point train and test continue to decline but error on the validation dataset starts going up and up: 
 
-> reg bmex usd-btc 0.3
+![overfit](https://i.imgur.com/rCg0MiR.png)
 
-Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.1 BTC immediately: 
-> /buy 
+Generally, put ~ 500 boost_rounds and set early_stopping to 50-100. The number of boosters should not be too low (there should be at least ~100) and not too high (not above ~300). 
+It is better to generate several models with boot_rounds around 100 (e.g. 80, 100, 120, 150) and check which performs better on a backtest (see the next section on backtesting). 
 
-> now bmex XRPH18 -0.1 
 
-Open short contracts on bitmex for Ripple (XRPH18) with the total cost of 0.05 BTC on the time-based (default 4H) candles confirmation: 
-> /buy 
+**Step 4**
 
-> 4h bmex XRPH18 -0.05
+Make sure that you change active model name for the asset in config.py. See this block in config: 
 
-Buy POWR tokens on bittrex on the breakout of 0.000095 for 0.5 BTC: 
-> /buy 
+```
+# Dictionary with market parameters
+param_dict  = {
+    'btc/usd': {
+        'model_name': 'btc_18-10-27.model',
+        'feature_periods': ['1h', '4h', '1d'],
+```
 
-> brk btrx btc-powr 0.5 0.000095
+## Backtesting 
 
-For the whole balance of 25 LTC on the binance exchange, start a task with the entry price of 0.015, take profit price of 0.019, and stop loss level of 0.013. 
-> /new
+**(!)** Set run_testmode in config to False because it disables backtesting.
 
-> r bina btc-ltc 0.015 0.019 0.013
+For backtesting, change 'backtesting_enabled' to True in config.py and set up the dates accordingly. Also, change use_db_labels to True (this uses pre-calculated features from the DB). Your setting should look like: 
+```
+## Backtesting mode
+backtesting_enabled = True      # remember to switch commission to 0 when testing
+backtesting_use_db_labels = True   # to use pre-calculated labels from DB or to calculate on the fly
+use_testnet = True # change to true for testing
+run_testmode = False     ### Testmode control if needed
+```
 
-Open long contracts for BTC on bitmex on the confirmation of bullishness on 4-hour candles for the total of 0.5 BTC, with the take profit level of 18850 and the stop loss of 15400 
-> /workflow
+When calling the script, almost strategy parameters with start/end dates could be passed through command line. For example, you can write a bat (or an sh) file with the following command: 
 
-> r bmex 18850 15400
+python C:\Robot\robot.py process s bmex btc/usd 400 0.5 --codename=main_backtest_2016  --start=01.01.2016:00.00 --end=31.04.2017:00.00
 
-> 4h bmex usd-btc 0.5
+^ there, 400 is the entry price and 0.5 is the starting amount (btc) 
+
+Traditional markets would be similar, e.g.: 
+python C:\Robot\robot.py process s oanda usd_jpy 112.3 1000 --codename=joy_main_backtest_2016  --start=01.01.2016:00.00 --end=01.04.2017:00.00 --limit_losses=1 --limit_losses_val=0.03 --predicted_confidence_threshold=0.55
+ 
+Other parameters you could specify are 
+--limit_losses=0/1 (limit losses, config default is 0)
+--limit_losses_val=0.XXXX (that's %, like 0.03 means 3%: what is the limit for limiting losses)
+--predicted_confidence_threshold=0.XX (that's %, like 0.3 means 30%: what is the threshold to enter positions)
+--exit_confidence_threshold=0.XX (% threshold to exit positions)
+--modelname=xxxxx.model (use a different model from the models folder)
+
+*Note*: Results will be slightly different on each run because of a random time lag in backtesting simulating delays when executing orders (2 to 10 minutes). 
+
+**Examples** of commands and intervals (used currently): 
+
+```
+python3 /home/ubuntu/Robot/current/robot.py process s bmex btc/usd 557 0.5 --codename=btc_backtest_ml_2014_prob0.4 --start=01.01.2016:00.00 --end=01.01.2017:00.00  --predicted_confidence_threshold=0.4
+python3 /home/ubuntu/Robot/current/robot.py process s bmex btc/usd 240 0.5 --codename=btc_backtest_ml_2015_prob0.4 --start=01.04.2015:00.00 --end=01.01.2016:00.00  --predicted_confidence_threshold=0.4
+python3 /home/ubuntu/Robot/current/robot.py process s bmex btc/usd 400 0.5 --codename=btc_backtest_ml_2016_prob0.4 --start=01.01.2016:00.00 --end=01.01.2017:00.00  --predicted_confidence_threshold=0.4
+python3 /home/ubuntu/Robot/current/robot.py process s bmex btc/usd 1100 0.5 --codename=btc_backtest_ml_2017_prob0.4 --start=02.04.2017:00.00 --end=30.03.2018:22.00  --predicted_confidence_threshold=0.4
+python3 /home/ubuntu/Robot/current/robot.py process s bmex btc/usd 11600 0.5 --codename=btc_backtest_ml_2018_prob0.4 --start=06.03.2018:00.00 --end=27.10.2018:00.00  --predicted_confidence_threshold=0.4
+
+python3 /home/ubuntu/Robot/current/robot.py process s oanda nas100_usd 6471 500 --start=01.01.2018:00.00 --end=27.10.2018:00.00 --codename=nas_2018_thr_0.5 --core_strategy=traditional --predicted_confidence_threshold=0.5
+python3 /home/ubuntu/Robot/current/robot.py process s oanda nas100_usd 4900 500 --start=05.01.2017:00.00 --end=01.01.2018:00.00 --codename=nas_2017_thr_0.5 --core_strategy=traditional --predicted_confidence_threshold=0.5
+```
+
+
+Logs (detailed and summary) will be generated in the folder logs_trade. 
+
+You can then run result_transform.py specifying folder with the --folder prefix. E.g.: 
+```
+python result_transform.py --folder="/home/ubuntu/Robot/current/results_folder"
+```
+
+This will put all the logs as columns in the file so they are easier to read and compare. The filename "results_processed.xlsx" will be created in the specified folder. 
+
 
 ### Editing the workflow database
 
 This repo includes a dummy database with no records which is a sqlite database (more than enough for the purpose of personal use). You can use any software working with sqlite to edit the tables in case anything goes wrong. 
-
-## Terms of use and non-responsibility clause
-
-Please use the scripts at your own risk. I am not responsible for your API keys being lost or intercepted, as well as your funds lost as a consequence of using the scripts. These scripts have some 'fool or fat fingers' protection included - however, you are fully responsible for secure storage of the scripts and for your course of actions. 
-
-## Contributions 
-
-As there are many other exchanges out there except for included ones, I would appreciate anyone's help in including other exchange APIs and writing a wrapper in exchange_func.py. Moreover, even scripts working with the current exchanges could be improved - in particular, bitmex commission and realised PNL calculation should be done and tested thoroughly; margin size can be calculated rather than fixed, and additional indicators could be used in combination with time analysis to make better probabilistic trades automatically. Robot messages currently do not correctly show values based on margins and also do not really reflect shorts. All this can be improved.   
-Additionally, I would appreciate help in more thorough processing of price/time data and developing a predictive model using sklearn. This would require getting historical data, for example, from [kaggle](https://www.kaggle.com/mczielinski/bitcoin-historical-data), using tdlib for the calculation of parameters, and then training a model based on the data. An example of how this could be done is available at my [Enron project repository](https://github.com/illi4/Enron_fraud). 
-
-Moreover, the code can definitely be cleaned and improved further.  
-
-Feel free to contact me via Telegram (illi4).

@@ -1,0 +1,1 @@
+start cmd /k python D:\Crypto\Robot\robot.py process s bmex usd-btc 1100 3000 300 0.5 --codename=regression_CHECK
